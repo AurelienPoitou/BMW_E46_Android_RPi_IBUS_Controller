@@ -1,9 +1,5 @@
 package com.trentseed.bmw_rpi_ibus_controller;
 
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-
-import android.annotation.SuppressLint;
 import android.graphics.Color;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -18,6 +14,10 @@ import android.widget.TextView;
 
 import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothInterface;
 import com.trentseed.bmw_rpi_ibus_controller.common.IBUSPacket;
+
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Locale;
 
 /**
  * Adapter that is used to display IBUS activity
@@ -76,7 +76,7 @@ public class AdapterIBUS extends BaseAdapter{
 		// label
 		TextView labelKey = new TextView(thisActivity);
 		String labelText = "Source: " + ibPacket.source_id + " (" + ibPacket.getSourceName() + ") @ " 
-						+ AdapterIBUS.getDate(Long.parseLong(ibPacket.timestamp), "hh:mm") + "\n"
+						+ AdapterIBUS.getDate(Long.parseLong(ibPacket.timestamp)) + "\n"
 						+ "Destination: " + ibPacket.destination_id + " (" + ibPacket.getDestinationName() + ")\n"
 						+ "Datagram: " + ibPacket.raw;
 		labelKey.setText(labelText);
@@ -107,15 +107,14 @@ public class AdapterIBUS extends BaseAdapter{
 	
 	/**
 	 * Return date in specified format.
+	 *
 	 * @param milliSeconds Date in milliseconds
-	 * @param dateFormat Date format 
 	 * @return String representing date in specified format
 	 */
-	@SuppressLint("SimpleDateFormat")
-	private static String getDate(long milliSeconds, String dateFormat)
+	private static String getDate(long milliSeconds)
 	{
 	    // Create a DateFormatter object for displaying date in specified format.
-	    SimpleDateFormat formatter = new SimpleDateFormat(dateFormat);
+	    SimpleDateFormat formatter = new SimpleDateFormat("hh:mm", Locale.ENGLISH);
 
 	    // Create a calendar object that will convert the date and time value in milliseconds to date. 
 	    Calendar calendar = Calendar.getInstance();

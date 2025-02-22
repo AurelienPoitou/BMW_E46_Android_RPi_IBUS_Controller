@@ -1,5 +1,8 @@
+.gradle
+.idea
 Android/bin/
 Android/gen/
+connected_car_app/*/build/
 *.pyc
 *.class
 java/bin/

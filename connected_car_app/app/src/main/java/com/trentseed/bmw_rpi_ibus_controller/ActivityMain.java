@@ -7,10 +7,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.speech.RecognizerIntent;
-import android.util.Log;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -19,26 +17,35 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AppCompatActivity;
+
 import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothInterface;
+import com.trentseed.bmw_rpi_ibus_controller.common.LogConfig;
 import com.trentseed.bmw_rpi_ibus_controller.common.VoiceCommand;
 
+import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.logging.Logger;
 
 /**
  * Activity that handles presents core functionality to user.
  * @author Trent
  */
-public class ActivityMain extends Activity {
+public class ActivityMain extends AppCompatActivity {
 
-	ImageView ivBmwEmblem;
-	ImageView ivBtnRadio;
-	ImageView ivBtnDevices;
-	ImageView ivBtnMaps;
-	ImageView ivBtnMedia;
-	ImageView ivBtnGear;
-	ImageView ivBtnVoice;
+    ImageView ivBmwEmblem;
+    ImageView ivBtnRadio;
+    ImageView ivBtnDevices;
+    ImageView ivBtnMaps;
+    ImageView ivBtnMedia;
+    ImageView ivBtnGear;
+    ImageView ivBtnVoice;
     ProgressBar pbConnecting;
     TextView tvDateTime;
 
@@ -46,113 +53,114 @@ public class ActivityMain extends Activity {
     SimpleDateFormat _sdfWatchTime = new SimpleDateFormat("hh:mm a");
     SimpleDateFormat _sdfWatchDate = new SimpleDateFormat("MM/dd");
 
+    private static final Logger logger = LogConfig.getLogger();
+
     private static final int SPEECH_REQUEST_CODE = 0;
 
-	@Override
-	protected void onCreate(Bundle savedInstanceState) {
-		super.onCreate(savedInstanceState);
-		requestWindowFeature(Window.FEATURE_NO_TITLE);
-		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-		onNewIntent(getIntent());
-		setContentView(R.layout.activity_main);
-		BluetoothInterface.mActivity = this;
-		
-		// get layout objects
-		ivBmwEmblem = findViewById(R.id.ivBMWEmblem);
-		ivBtnRadio = findViewById(R.id.ivBtnRadio);
-		ivBtnDevices = findViewById(R.id.ivBtnDevices);
-		ivBtnMaps = findViewById(R.id.ivBtnMaps);
-		ivBtnMedia = findViewById(R.id.ivBtnMedia);
-		ivBtnVoice = findViewById(R.id.ivBtnMic);
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        onNewIntent(getIntent());
+        setContentView(R.layout.activity_main);
+        // Pass the directory to store log files
+        File logDir = getExternalFilesDir(null);
+        LogConfig.configure(logDir);
+
+        logger.info("onCreate: Activity created");
+        BluetoothInterface.mActivity = this;
+
+        // Register the ActivityResultLauncher
+        // Bluetooth has been enabled
+        // Bluetooth has not been enabled
+        ActivityResultLauncher<Intent> enableBluetoothLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK) {
+                        // Bluetooth has been enabled
+                        Toast.makeText(this, "Bluetooth enabled", Toast.LENGTH_SHORT).show();
+                    } else {
+                        // Bluetooth has not been enabled
+                        Toast.makeText(this, "Bluetooth not enabled", Toast.LENGTH_SHORT).show();
+                    }
+                });
+
+        // get layout objects
+        ivBmwEmblem = findViewById(R.id.ivBMWEmblem);
+        ivBtnRadio = findViewById(R.id.ivBtnRadio);
+        ivBtnDevices = findViewById(R.id.ivBtnDevices);
+        ivBtnMaps = findViewById(R.id.ivBtnMaps);
+        ivBtnMedia = findViewById(R.id.ivBtnMedia);
+        ivBtnVoice = findViewById(R.id.ivBtnMic);
         ivBtnGear = findViewById(R.id.ivBtnGear);
         pbConnecting = findViewById(R.id.pbBluetoothConnecting);
         tvDateTime = findViewById(R.id.tvDateTime);
-		
-		// bind click handlers to layout objects
-		ivBmwEmblem.setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View v) {
-                if(!BluetoothInterface.isConnected() && !BluetoothInterface.isConnecting){
-                    new PerformBackgroundConnect().execute();
-                }
-			}
-		});
-		ivBtnMaps.setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View v) {
-				// launch Google Maps
-				String uri = "http://maps.google.com/maps";
-				Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
-				ActivityMain.this.startActivity(intent);
-			}
-		});
-		ivBtnRadio.setOnClickListener(new View.OnClickListener() {
-                @Override
-			public void onClick(View v) {
-                // launch Pandora Radio
-                Intent launchPlay = getPackageManager().getLaunchIntentForPackage("com.pandora.android");
-                if(launchPlay != null) startActivity(launchPlay);
-			}
-		});
-		ivBtnDevices.setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View v) {
-				Intent launchWindows = new Intent(ActivityMain.this, ActivityDevices.class);
-				startActivity(launchWindows);				
-			}
-		});
-		ivBtnMedia.setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View v) {
-				// launch Google Play Music
-                Intent launchPlay = getPackageManager().getLaunchIntentForPackage("com.google.android.music");
-                if(launchPlay != null)startActivity(launchPlay);
-			}
-		});
-        ivBtnVoice.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                displaySpeechRecognizer();
+
+        // bind click handlers to layout objects
+        ivBmwEmblem.setOnClickListener(v -> {
+            if (!BluetoothInterface.isConnected() && !BluetoothInterface.isConnecting) {
+                performBackgroundConnect();
             }
         });
-        ivBtnGear.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // TODO - add settings support, launching legacy activity until then
-                Intent launchWindows = new Intent(ActivityMain.this, ActivityIBUS.class);
-                startActivity(launchWindows);
-            }
+        ivBtnMaps.setOnClickListener(v -> {
+            // launch Google Maps
+            String uri = "http://maps.google.com/maps";
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
+            ActivityMain.this.startActivity(intent);
         });
-	
-		// check if bluetooth enabled (prompt to enable)
+        ivBtnRadio.setOnClickListener(v -> {
+            // launch Pandora Radio
+            Intent launchPlay = getPackageManager().getLaunchIntentForPackage("com.pandora.android");
+            if (launchPlay != null) startActivity(launchPlay);
+        });
+        ivBtnDevices.setOnClickListener(v -> {
+            Intent launchWindows = new Intent(ActivityMain.this, ActivityDevices.class);
+            startActivity(launchWindows);
+        });
+        ivBtnMedia.setOnClickListener(v -> {
+            // launch Google Play Music
+            Intent launchPlay = getPackageManager().getLaunchIntentForPackage("com.google.android.music");
+            if (launchPlay != null) startActivity(launchPlay);
+        });
+        ivBtnVoice.setOnClickListener(v -> displaySpeechRecognizer());
+        ivBtnGear.setOnClickListener(v -> {
+            // TODO - add settings support, launching legacy activity until then
+            Intent launchWindows = new Intent(ActivityMain.this, ActivityIBUS.class);
+            startActivity(launchWindows);
+        });
+
+        // check if bluetooth enabled (prompt to enable)
         refreshConnectingStatus();
 
         // set the date and time
         setDateTime();
 
-		if (BluetoothInterface.mBluetoothAdapter!=null && !BluetoothInterface.mBluetoothAdapter.isEnabled()) {
-		    Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-		    startActivityForResult(enableBtIntent, 100);
-		}
-	}
-	
-	@Override
-	protected void onResume(){
-		super.onResume();
-		BluetoothInterface.mActivity = this;
+        if (BluetoothInterface.mBluetoothAdapter != null && !BluetoothInterface.mBluetoothAdapter.isEnabled()) {
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            enableBluetoothLauncher.launch(enableBtIntent);
+        }
+    }
 
-        if(!BluetoothInterface.isConnected()) new PerformBackgroundConnect().execute();
-	}
-	
-	@Override
-	protected void onDestroy() {
-		super.onDestroy();
-		try {
-			BluetoothInterface.disconnect();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
+    @Override
+    protected void onResume() {
+        super.onResume();
+        BluetoothInterface.mActivity = this;
+
+        if (!BluetoothInterface.isConnected()) {
+            performBackgroundConnect();
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        try {
+            BluetoothInterface.disconnect();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 
     @Override
     public void onStart() {
@@ -175,8 +183,8 @@ public class ActivityMain extends Activity {
             unregisterReceiver(_broadcastReceiver);
     }
 
-	public void setDateTime(){
-	    Date now = new Date();
+    public void setDateTime() {
+        Date now = new Date();
         String date = _sdfWatchDate.format(now);
         String time = _sdfWatchTime.format(now);
         tvDateTime.setText(time + "\n" + date);
@@ -204,44 +212,37 @@ public class ActivityMain extends Activity {
         super.onActivityResult(requestCode, resultCode, data);
     }
 
-    private class PerformBackgroundConnect extends AsyncTask<Void, Void, Void> {
+    private void performBackgroundConnect() {
+        BluetoothInterface.isConnecting = true;
+        refreshConnectingStatus();
 
-        @Override
-        protected Void doInBackground(Void... params) {
-            Log.d("BMW", "Checking connection in doInBackground");
-            BluetoothInterface.checkConnection();
-            return null;
-        }
-
-        @Override
-        protected void onPostExecute(Void result) {
-            Log.d("BMW", "connection onPostExecute");
-            BluetoothInterface.isConnecting = false;
-            refreshConnectingStatus();
-            if(BluetoothInterface.isConnected()){
-                Toast.makeText(ActivityMain.this, "Connected!", Toast.LENGTH_SHORT).show();
-            }else{
-                Toast.makeText(ActivityMain.this, "Unable to connect via bluetooth :(", Toast.LENGTH_SHORT).show();
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        executorService.execute(() -> {
+            try {
+                logger.info("Checking connection in background thread");
+                BluetoothInterface.checkConnection();
+            } finally {
+                runOnUiThread(() -> {
+                    logger.info("connection on UI thread");
+                    BluetoothInterface.isConnecting = false;
+                    refreshConnectingStatus();
+                    if (BluetoothInterface.isConnected()) {
+                        Toast.makeText(ActivityMain.this, "Connected!", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(ActivityMain.this, "Unable to connect via bluetooth :(", Toast.LENGTH_SHORT).show();
+                    }
+                });
             }
-        }
-
-        @Override
-        protected void onPreExecute() {
-            BluetoothInterface.isConnecting = true;
-            refreshConnectingStatus();
-        }
-
-        @Override
-        protected void onProgressUpdate(Void... values) {}
+        });
     }
 
     /**
      * If Bluetooth connection is being established, show loader.
      */
-    public void refreshConnectingStatus(){
-        if (BluetoothInterface.isConnecting()){
+    public void refreshConnectingStatus() {
+        if (BluetoothInterface.isConnecting()) {
             pbConnecting.setVisibility(View.VISIBLE);
-        }else{
+        } else {
             pbConnecting.setVisibility(View.GONE);
         }
     }
@@ -251,7 +252,7 @@ public class ActivityMain extends Activity {
      * activity for context.
      * @param message content to display in toast message
      */
-    public void showToast(String message){
+    public void showToast(String message) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
 }

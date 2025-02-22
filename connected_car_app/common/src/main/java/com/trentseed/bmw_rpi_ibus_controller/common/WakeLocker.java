@@ -4,8 +4,6 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.os.PowerManager;
 
-import java.lang.NullPointerException;
-
 /** 
  * This class handles device sleep/wake lock features. Utilized
  * by GCMIntentService.

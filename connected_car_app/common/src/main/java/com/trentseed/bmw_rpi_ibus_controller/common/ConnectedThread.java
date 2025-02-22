@@ -1,11 +1,12 @@
 package com.trentseed.bmw_rpi_ibus_controller.common;
 
-import java.io.IOException;
-
 import android.util.Log;
+
 import com.google.gson.Gson;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+
+import java.io.IOException;
 
 /**
  * Thread that handles Bluetooth RFCOMM channel reading from Raspberry Pi

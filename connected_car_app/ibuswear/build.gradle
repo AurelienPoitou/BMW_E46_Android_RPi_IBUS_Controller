@@ -2,12 +2,14 @@ apply plugin: 'com.android.application'
 
 
 android {
-    compileSdkVersion 26
+    compileSdkVersion 33
+
+    namespace 'com.trentseed.bmw_rpi_ibus_controller.ibuswear'
 
     defaultConfig {
         applicationId "com.trentseed.bmw_rpi_ibus_controller"
-        minSdkVersion 23
-        targetSdkVersion 26
+        minSdkVersion 21
+        targetSdkVersion 33
         versionCode 1
         versionName "1.0"
     }

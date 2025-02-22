@@ -1,11 +1,11 @@
 package com.trentseed.bmw_rpi_ibus_controller.common;
 
-import com.google.gson.Gson;
-
 import android.app.Activity;
 import android.content.Intent;
 import android.util.Log;
 import android.view.KeyEvent;
+
+import com.google.gson.Gson;
 
 /**
  * Navigation class handles core communication with Raspberry Pi.
