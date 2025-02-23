@@ -1,20 +1,12 @@
 <resources>
 
-    <!--
-        Base application theme, dependent on API level. This theme is replaced
-        by AppBaseTheme from res/values-vXX/styles.xml on newer devices.
-    -->
-    <style name="AppBaseTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <!--
-            Theme customizations available in newer API levels can go in
-            res/values-vXX/styles.xml, while customizations related to
-            backward-compatibility can go here.
-        -->
-    </style>
-
     <!-- Application theme. -->
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <!-- Customize your theme here -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <!-- Customize your theme here. -->
+        <item name="android:textColorPrimary">@color/text_color_primary</item>
+        <!-- Set default button colors -->
+        <item name="colorButtonNormal">@color/colorButtonNormal</item>
+        <item name="android:textColorPrimaryInverse">@color/colorButtonText</item>
     </style>
 
 </resources>

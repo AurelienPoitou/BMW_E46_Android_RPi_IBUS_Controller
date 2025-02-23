@@ -1,0 +1,9 @@
+<resources>
+    <color name="black">#000000</color>
+    <color name="dark_gray">#2E2E2E</color>
+    <color name="gray">#787878</color>
+    <color name="white">#FFFFFF</color>
+    <color name="colorButtonNormal">#2196F3</color>
+    <color name="colorButtonText">#FFFFFF</color>
+    <color name="text_color_primary">#FFFFFF</color>
+</resources>

@@ -2,7 +2,9 @@ package com.trentseed.bmw_rpi_ibus_controller;
 
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
+import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -21,6 +23,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothHelper;
 import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothInterface;
 import com.trentseed.bmw_rpi_ibus_controller.common.LogConfig;
 import com.trentseed.bmw_rpi_ibus_controller.common.VoiceCommand;
@@ -29,6 +32,8 @@ import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
@@ -41,21 +46,23 @@ public class ActivityMain extends AppCompatActivity {
 
     ImageView ivBmwEmblem;
     ImageView ivBtnRadio;
-    ImageView ivBtnDevices;
     ImageView ivBtnMaps;
     ImageView ivBtnMedia;
+    ImageView ivBtnDevices;
+    ImageView ivBtnFeatures;
+    ImageView ivBtnNew3;
     ImageView ivBtnGear;
     ImageView ivBtnVoice;
     ProgressBar pbConnecting;
     TextView tvDateTime;
 
     BroadcastReceiver _broadcastReceiver;
-    SimpleDateFormat _sdfWatchTime = new SimpleDateFormat("hh:mm a");
-    SimpleDateFormat _sdfWatchDate = new SimpleDateFormat("MM/dd");
+    private ActivityResultLauncher<Intent> speechRecognizerLauncher;
+    SimpleDateFormat _sdfWatchTime = new SimpleDateFormat("hh:mm", Locale.ENGLISH);
+    SimpleDateFormat _sdfWatchDate = new SimpleDateFormat("dd/MM", Locale.ENGLISH);
 
     private static final Logger logger = LogConfig.getLogger();
-
-    private static final int SPEECH_REQUEST_CODE = 0;
+    private BluetoothHelper bluetoothHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,29 +76,40 @@ public class ActivityMain extends AppCompatActivity {
         LogConfig.configure(logDir);
 
         logger.info("onCreate: Activity created");
-        BluetoothInterface.mActivity = this;
 
-        // Register the ActivityResultLauncher
-        // Bluetooth has been enabled
-        // Bluetooth has not been enabled
-        ActivityResultLauncher<Intent> enableBluetoothLauncher = registerForActivityResult(
+        bluetoothHelper = new BluetoothHelper(this);
+        BluetoothInterface.mBluetoothHelper = bluetoothHelper;
+
+        if (!bluetoothHelper.isBluetoothSupported()) {
+            showToast("Bluetooth is not supported on this device");
+            return;
+        }
+
+        ActivityResultLauncher<Intent> enableBtLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == RESULT_OK) {
-                        // Bluetooth has been enabled
-                        Toast.makeText(this, "Bluetooth enabled", Toast.LENGTH_SHORT).show();
+                        showToast("Bluetooth enabled");
                     } else {
-                        // Bluetooth has not been enabled
-                        Toast.makeText(this, "Bluetooth not enabled", Toast.LENGTH_SHORT).show();
+                        showToast("Bluetooth not enabled");
                     }
-                });
+                }
+        );
+
+        if (!bluetoothHelper.isBluetoothEnabled()) {
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            enableBtLauncher.launch(enableBtIntent);
+        }
+        BluetoothInterface.mActivity = this;
 
         // get layout objects
         ivBmwEmblem = findViewById(R.id.ivBMWEmblem);
         ivBtnRadio = findViewById(R.id.ivBtnRadio);
-        ivBtnDevices = findViewById(R.id.ivBtnDevices);
         ivBtnMaps = findViewById(R.id.ivBtnMaps);
         ivBtnMedia = findViewById(R.id.ivBtnMedia);
+        ivBtnDevices = findViewById(R.id.ivBtnDevices);
+        ivBtnFeatures = findViewById(R.id.ivBtnFeatures);
+        ivBtnNew3 = findViewById(R.id.ivBtnNew3);
         ivBtnVoice = findViewById(R.id.ivBtnMic);
         ivBtnGear = findViewById(R.id.ivBtnGear);
         pbConnecting = findViewById(R.id.pbBluetoothConnecting);
@@ -110,19 +128,42 @@ public class ActivityMain extends AppCompatActivity {
             ActivityMain.this.startActivity(intent);
         });
         ivBtnRadio.setOnClickListener(v -> {
-            // launch Pandora Radio
-            Intent launchPlay = getPackageManager().getLaunchIntentForPackage("com.pandora.android");
-            if (launchPlay != null) startActivity(launchPlay);
+            // Launch Spotify using an explicit intent
+            Intent launchRadio = new Intent(Intent.ACTION_MAIN);
+            launchRadio.setComponent(new ComponentName("com.spotify.music", "com.spotify.music.MainActivity"));
+            try {
+                startActivity(launchRadio);
+            } catch (ActivityNotFoundException e) {
+                showToast("Spotify app is not installed on your device.");
+            }
         });
         ivBtnDevices.setOnClickListener(v -> {
             Intent launchWindows = new Intent(ActivityMain.this, ActivityDevices.class);
             startActivity(launchWindows);
         });
         ivBtnMedia.setOnClickListener(v -> {
-            // launch Google Play Music
-            Intent launchPlay = getPackageManager().getLaunchIntentForPackage("com.google.android.music");
-            if (launchPlay != null) startActivity(launchPlay);
+            // Launch Spotify using an explicit intent
+            Intent launchRadio = new Intent(Intent.ACTION_MAIN);
+            launchRadio.setComponent(new ComponentName("com.spotify.music", "com.spotify.music.MainActivity"));
+            try {
+                startActivity(launchRadio);
+            } catch (ActivityNotFoundException e) {
+                showToast("Spotify app is not installed on your device.");
+            }
         });
+
+        // Initialize the ActivityResultLauncher
+        speechRecognizerLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                        List<String> results = result.getData().getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+                        String spokenText = results.get(0);
+                        String resultText = VoiceCommand.processSpokenText(spokenText);
+                        showToast(resultText);
+                    }
+                }
+        );
         ivBtnVoice.setOnClickListener(v -> displaySpeechRecognizer());
         ivBtnGear.setOnClickListener(v -> {
             // TODO - add settings support, launching legacy activity until then
@@ -135,11 +176,6 @@ public class ActivityMain extends AppCompatActivity {
 
         // set the date and time
         setDateTime();
-
-        if (BluetoothInterface.mBluetoothAdapter != null && !BluetoothInterface.mBluetoothAdapter.isEnabled()) {
-            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            enableBluetoothLauncher.launch(enableBtIntent);
-        }
     }
 
     @Override
@@ -168,7 +204,7 @@ public class ActivityMain extends AppCompatActivity {
         _broadcastReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context ctx, Intent intent) {
-                if (intent.getAction().compareTo(Intent.ACTION_TIME_TICK) == 0)
+                if (Objects.requireNonNull(intent.getAction()).compareTo(Intent.ACTION_TIME_TICK) == 0)
                     setDateTime();
             }
         };
@@ -187,29 +223,14 @@ public class ActivityMain extends AppCompatActivity {
         Date now = new Date();
         String date = _sdfWatchDate.format(now);
         String time = _sdfWatchTime.format(now);
-        tvDateTime.setText(time + "\n" + date);
+        tvDateTime.setText(String.format("%s\n%s", time, date));
     }
 
-    /**
-     * Create an intent that can start the Speech Recognizer activity
-     */
     private void displaySpeechRecognizer() {
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        // Start the activity, the intent will be populated with the speech text
-        startActivityForResult(intent, SPEECH_REQUEST_CODE);
-    }
-
-    @Override
-    public void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == SPEECH_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
-            List<String> results = data.getStringArrayListExtra( RecognizerIntent.EXTRA_RESULTS);
-            String spokenText = results.get(0);
-            String result = VoiceCommand.processSpokenText(spokenText);
-            showToast(result);
-        }
-        super.onActivityResult(requestCode, resultCode, data);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        // Launch the speech recognizer activity
+        speechRecognizerLauncher.launch(intent);
     }
 
     private void performBackgroundConnect() {
@@ -227,9 +248,9 @@ public class ActivityMain extends AppCompatActivity {
                     BluetoothInterface.isConnecting = false;
                     refreshConnectingStatus();
                     if (BluetoothInterface.isConnected()) {
-                        Toast.makeText(ActivityMain.this, "Connected!", Toast.LENGTH_SHORT).show();
+                        showToast("Connected!");
                     } else {
-                        Toast.makeText(ActivityMain.this, "Unable to connect via bluetooth :(", Toast.LENGTH_SHORT).show();
+                        showToast("Unable to connect via bluetooth :(");
                     }
                 });
             }

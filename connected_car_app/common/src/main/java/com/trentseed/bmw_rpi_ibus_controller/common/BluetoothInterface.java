@@ -1,8 +1,8 @@
 package com.trentseed.bmw_rpi_ibus_controller.common;
 
+
 import android.Manifest;
 import android.app.Activity;
-import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.pm.PackageManager;
@@ -26,7 +26,7 @@ public class BluetoothInterface {
     // Bluetooth objects
     public static Activity mActivity;
     public static List<IBUSPacket> mArrayListIBUSActivity = new ArrayList<>();
-    public static BluetoothAdapter mBluetoothAdapter;
+    public static BluetoothHelper mBluetoothHelper;
     public static BluetoothDevice mBluetoothDevice;
     public static BluetoothSocket mBluetoothSocket;
     public static InputStream mBluetoothInputStream;
@@ -50,7 +50,7 @@ public class BluetoothInterface {
      * Connects to Raspberry Pi via Bluetooth.
      * Note: Python services must be running on remote device.
      */
-    public static void connectToRaspberryPi(){
+    public static void connectToRaspberryPi() {
         logger.info("attempting to connect to controller...");
         try {
             // Request Bluetooth permissions
@@ -67,7 +67,7 @@ public class BluetoothInterface {
             // Connect to device and get input stream
             BluetoothInterface.isConnecting = true;
             mArrayListIBUSActivity = new ArrayList<>();
-            mBluetoothDevice = mBluetoothAdapter.getRemoteDevice(remoteBluetoothAddress);
+            mBluetoothDevice = mBluetoothHelper.getAdapter().getRemoteDevice(remoteBluetoothAddress);
             logger.info("Attempting to create socket to service UUID");
             mBluetoothSocket = mBluetoothDevice.createInsecureRfcommSocketToServiceRecord(serviceUUID);
             logger.info("Socket created, attempting to connect");
@@ -93,7 +93,7 @@ public class BluetoothInterface {
      * @return boolean
      */
     public static boolean isConnected() {
-        return mBluetoothAdapter != null && mBluetoothDevice != null && mBluetoothSocket.isConnected();
+        return mBluetoothHelper.isBluetoothSupported() && mBluetoothDevice != null && mBluetoothSocket.isConnected();
     }
 
     /**
@@ -109,8 +109,7 @@ public class BluetoothInterface {
      */
     public static void checkConnection() {
         if (!BluetoothInterface.isConnected()) {
-            mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-            if (mBluetoothAdapter == null || !mBluetoothAdapter.isEnabled()) {
+            if (!mBluetoothHelper.isBluetoothEnabled()) {
                 showToast("Bluetooth is not enabled or not available");
                 return;
             }
@@ -127,7 +126,6 @@ public class BluetoothInterface {
         } catch (Exception e) {
             logger.info(e.getMessage());
         } finally {
-            mBluetoothAdapter = null;
             mBluetoothDevice = null;
             mBluetoothSocket = null;
         }
