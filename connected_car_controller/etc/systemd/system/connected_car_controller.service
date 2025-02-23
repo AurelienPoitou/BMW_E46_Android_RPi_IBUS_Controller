@@ -1,0 +1,17 @@
+[Unit]
+Description=Connected Car Controller
+After=bluetooth.service bluetooth-init.service
+Requires=bluetooth.service bluetooth-init.service
+
+[Service]
+#ExecStartPre=/usr/bin/hciconfig hci0 piscan
+ExecStartPre=/usr/bin/echo "discoverable on" | /usr/sbin/bluetoothd
+ExecStart=/usr/bin/python3 /home/pi/Apps/controller/connected_car_controller/start_controller.py bmw-e46
+Restart=always
+User=root
+
+# Add the necessary capabilities
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN
+
+[Install]
+WantedBy=multi-user.target
