@@ -32,8 +32,10 @@ public class BluetoothInterface {
     public static InputStream mBluetoothInputStream;
     public static OutputStream mBluetoothOutputStream;
     public static UUID serviceUUID = UUID.fromString("94f39d29-7d6d-437d-973b-fba39e49d4ee");
-    public static String remoteBluetoothAddress = "DC:A6:32:78:36:FF";
-    public static ConnectedThread listenThread;
+    public static String remoteBluetoothAddress = "B8:27:EB:52:8A:6C"; // RPi0
+    public static IBUSPacketListener mIBUSPacketListener;
+    //public static String remoteBluetoothAddress = "DC:A6:32:78:36:FF"; // RPi4
+    private static ConnectedThread listenThread;
     public static Boolean isConnecting = false;
 
     private static final int REQUEST_BLUETOOTH_PERMISSIONS = 1;
@@ -93,7 +95,14 @@ public class BluetoothInterface {
      * @return boolean
      */
     public static boolean isConnected() {
-        return mBluetoothHelper.isBluetoothSupported() && mBluetoothDevice != null && mBluetoothSocket.isConnected();
+        if (!mBluetoothHelper.isBluetoothSupported() || mBluetoothDevice == null || mBluetoothSocket == null) {
+            return false;
+        }
+
+        if (!mBluetoothSocket.isConnected()) {
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -156,5 +165,9 @@ public class BluetoothInterface {
         mActivity.runOnUiThread(() -> {
             Toast.makeText(mActivity, message, Toast.LENGTH_SHORT).show();
         });
+    }
+
+    public static void setIBUSPacketListener(IBUSPacketListener listener) {
+        mIBUSPacketListener = listener;
     }
 }

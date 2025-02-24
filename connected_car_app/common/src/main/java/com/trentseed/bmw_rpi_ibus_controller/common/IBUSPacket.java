@@ -1,67 +1,62 @@
 package com.trentseed.bmw_rpi_ibus_controller.common;
 
 import java.text.Normalizer;
+import java.util.List;
 
 /**
  * IBUS "packet" that is sent between BMW and Raspberry Pi
  */
 public class IBUSPacket {
-
-    public String source_id;
-    public String length;
-    public String destination_id;
-    public String data;
-    public String xor_checksum;
-    public String raw;
-    public String timestamp;
+    public List<Integer> raw;
+    public long timestamp;
 
     public IBUSPacket(){ }
 
     public String getSourceName(){
-        return getDeviceName(this.source_id);
+        return getDeviceName(this.raw.get(0));
     }
 
     public String getDestinationName(){
-        return getDeviceName(this.destination_id);
+        return getDeviceName(raw.get(2));
     }
 
-    private String getDeviceName(String device_id){
+    private String getDeviceName(int device_id){
         switch (device_id) {
-            case "00":
+            case 0:
                 return "Broadcast 00";
-            case "18":
+            case 0x18:
                 return "CDW - CDC CD-Player";
-            case "3b":
+            case 0x3b:
                 return "NAV Navigation/Video Module";
-            case "43":
+            case 0x43:
                 return "Menu Screen";
-            case "50":
+            case 0x50:
                 return "MFL Steering Wheel Controls";
-            case "60":
+            case 0x60:
                 return "PDC Park Distance Control";
-            case "68":
+            case 0x68:
                 return "RAD Radio";
-            case "6a":
+            case 0x6a:
                 return "DSP Digital Sound Processor";
-            case "80":
+            case 0x80:
                 return "IKE Instrument Kombi Electronics";
-            case "bb":
+            case 0xbb:
                 return "TV Module";
-            case "bf":
+            case 0xbf:
                 return "LCM Light Control Module";
-            case "c0":
+            case 0xc0:
                 return "MID Multi-Information Display Buttons";
-            case "c8":
+            case 0xc8:
                 return "TEL Telephone";
-            case "d0":
+            case 0xd0:
                 return "Navigation Location";
-            case "e7":
+            case 0xe7:
                 return "OBC Text Bar";
-            case "ed":
+            case 0xed:
                 return "Lights, Wipers, Seat Memory";
-            case "f0":
+            case 0xf0:
                 return "BMB Board Monitor Buttons";
-            case "ff":
+            case 0xff:
                 return "Broadcast FF";
             default:
                 return "Unknown";
@@ -75,9 +70,8 @@ public class IBUSPacket {
      */
     public String getAsciiFromRaw(){
         StringBuilder sb = new StringBuilder();
-        for( int i=0; i<raw.length()-1; i+=2 ){
-            String output = raw.substring(i, (i + 2));
-            int decimal = Integer.parseInt(output, 16);
+        for( int i=0; i<raw.size(); i+=1 ){
+            int decimal = raw.get(i);
             sb.append((char)decimal);
         }
         String normalized = Normalizer.normalize(sb.toString(), Normalizer.Form.NFD).replaceAll("[^\\p{ASCII}]", "");
@@ -87,4 +81,11 @@ public class IBUSPacket {
         return normalized.replace(" CAP", " CA");  // extra data to remove
     }
 
+    public int getSourceId() {
+        return raw.get(0);
+    }
+
+    public int getDestinationId() {
+        return raw.get(2);
+    }
 }

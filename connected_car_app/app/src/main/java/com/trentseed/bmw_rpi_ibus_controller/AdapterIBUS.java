@@ -1,124 +1,59 @@
 package com.trentseed.bmw_rpi_ibus_controller;
 
-import android.graphics.Color;
-import android.util.TypedValue;
-import android.view.Gravity;
+import android.content.Context;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewGroup.LayoutParams;
 import android.widget.BaseAdapter;
-import android.widget.GridView;
-import android.widget.ImageView;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 
-import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothInterface;
 import com.trentseed.bmw_rpi_ibus_controller.common.IBUSPacket;
 
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Locale;
+import java.util.List;
 
-/**
- * Adapter that is used to display IBUS activity
- * @author Trent Seed
- */
-public class AdapterIBUS extends BaseAdapter{
-	
-    private ActivityIBUS thisActivity;
-	
-	AdapterIBUS(ActivityIBUS thisActivity){
-		//store context and determine enroll status
-		this.thisActivity = thisActivity;
-	}
-	
-	public int getCount() {
-		return BluetoothInterface.mArrayListIBUSActivity.size();
+public class AdapterIBUS extends BaseAdapter {
+
+	private Context context;
+	private List<IBUSPacket> ibusPackets;
+
+	public AdapterIBUS(Context context, List<IBUSPacket> ibusPackets) {
+		this.context = context;
+		this.ibusPackets = ibusPackets;
 	}
 
-	public IBUSPacket getItem(int position) {
-		return BluetoothInterface.mArrayListIBUSActivity.get(position);
-	}
-
-	public long getItemId(int position) {
-		return BluetoothInterface.mArrayListIBUSActivity.get(position).hashCode();
-	}
-	
 	@Override
-	public void notifyDataSetChanged(){
-		super.notifyDataSetChanged();
-		
-		if(this.getCount() == 0){
-			thisActivity.tvNoActivity.setVisibility(View.VISIBLE);
-		}else{
-			thisActivity.tvNoActivity.setVisibility(View.GONE);			
+	public int getCount() {
+		return ibusPackets.size();
+	}
+
+	@Override
+	public IBUSPacket getItem(int position) {
+		return ibusPackets.get(position);
+	}
+
+	@Override
+	public long getItemId(int position) {
+		return position;
+	}
+
+	@Override
+	public View getView(int position, View convertView, ViewGroup parent) {
+		if (convertView == null) {
+			LayoutInflater inflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+			convertView = inflater.inflate(R.layout.list_item_ibus, parent, false);
 		}
+
+		TextView tvRaw = convertView.findViewById(R.id.tvRaw);
+		TextView tvAscii = convertView.findViewById(R.id.tvAscii);
+
+		IBUSPacket packet = getItem(position);
+		tvRaw.setText("Raw: " + packet.raw);
+		tvAscii.setText("ASCII: " + packet.getAsciiFromRaw());
+
+		return convertView;
 	}
 
-	public View getView(final int position, View convertView, ViewGroup parent) {
-		// get this object
-		IBUSPacket ibPacket = BluetoothInterface.mArrayListIBUSActivity.get(position);
-		
-		// create field view
-		LinearLayout viewContainer = new LinearLayout(thisActivity);
-		viewContainer.setOrientation(LinearLayout.HORIZONTAL);
-		viewContainer.setGravity(Gravity.START);
-		viewContainer.setPadding(40, 20, 20, 0);
-		
-		// packet image view
-		float height = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 80 ,thisActivity.getResources().getDisplayMetrics());
-		ImageView ivPacket = new ImageView(thisActivity);
-		ivPacket.setImageResource(R.drawable.packet);
-		GridView.LayoutParams imgParams = new GridView.LayoutParams((int)height, (int)height);
-		ivPacket.setLayoutParams(imgParams);
-		ivPacket.setPadding(10, 10, 10, 10);
-		
-		// label
-		TextView labelKey = new TextView(thisActivity);
-		String labelText = "Source: " + ibPacket.source_id + " (" + ibPacket.getSourceName() + ") @ " 
-						+ AdapterIBUS.getDate(Long.parseLong(ibPacket.timestamp)) + "\n"
-						+ "Destination: " + ibPacket.destination_id + " (" + ibPacket.getDestinationName() + ")\n"
-						+ "Datagram: " + ibPacket.raw;
-		labelKey.setText(labelText);
-		labelKey.setTextColor(Color.WHITE);
-		GridView.LayoutParams params = new GridView.LayoutParams(LayoutParams.MATCH_PARENT, (int)height, 1);
-		labelKey.setGravity(Gravity.CENTER_VERTICAL);
-		labelKey.setPadding(40, 0, 0, 0);
-		labelKey.setLayoutParams(params);
-		labelKey.setTextSize(18.0f);
-		
-		// timestamp
-		TextView tvTimestamp = new TextView(thisActivity);
-		String labelTimestamp = ibPacket.timestamp;
-		tvTimestamp.setText(labelTimestamp);
-		tvTimestamp.setTextColor(Color.WHITE);
-		GridView.LayoutParams paramsTimestamp = new GridView.LayoutParams(LayoutParams.MATCH_PARENT, (int)height, 1);
-		tvTimestamp.setGravity(Gravity.CENTER_VERTICAL);
-		tvTimestamp.setPadding(40, 0, 0, 0);
-		tvTimestamp.setLayoutParams(paramsTimestamp);
-		tvTimestamp.setTextSize(20.0f);
-		
-		// add sub-views to container view
-		viewContainer.addView(ivPacket);
-		viewContainer.addView(labelKey);
-		//viewContainer.addView(tvTimestamp);
-		return viewContainer;
-	}
-	
-	/**
-	 * Return date in specified format.
-	 *
-	 * @param milliSeconds Date in milliseconds
-	 * @return String representing date in specified format
-	 */
-	private static String getDate(long milliSeconds)
-	{
-	    // Create a DateFormatter object for displaying date in specified format.
-	    SimpleDateFormat formatter = new SimpleDateFormat("hh:mm", Locale.ENGLISH);
-
-	    // Create a calendar object that will convert the date and time value in milliseconds to date. 
-	    Calendar calendar = Calendar.getInstance();
-	    calendar.setTimeInMillis(milliSeconds);
-	    return formatter.format(calendar.getTime());
+	public void setIbusPackets(List<IBUSPacket> ibusPackets) {
+		this.ibusPackets = ibusPackets;
 	}
 }

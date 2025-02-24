@@ -7,63 +7,83 @@ import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Thread that handles Bluetooth RFCOMM channel reading from Raspberry Pi
  */
 class ConnectedThread extends Thread {
 
-    /**
-     * Starts a loop responsible for continuously reading bytes from the
-     * Bluetooth input stream, and invoking IBUSWrapper.processPacket().
-     */
-    public void run() {
+    public class Config {
+        public static final int BLUETOOTH_BUFFER_SIZE = 1024; // Example default
+    }
 
-        // start a loop that reads from the bluetooth input stream
+    public class InvalidJSONException extends Exception {
+        public InvalidJSONException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
+    public void run() {
         while (true) {
             try {
-                // read bytes from bluetooth input stream
-                byte[] buffer = new byte[2048];  // TODO: from config
+                byte[] buffer = new byte[Config.BLUETOOTH_BUFFER_SIZE];
                 int bytes = BluetoothInterface.mBluetoothInputStream.read(buffer);
-                if(bytes == 0) {
+
+                if (bytes == -1) {
+                    Log.w("BMW", "Bluetooth stream closed.");
+                    BluetoothInterface.checkConnection();
+                    break;
+                }
+
+                if (bytes == 0) {
+                    Log.d("BMW", "No data received from Bluetooth.");
                     continue;
                 }
 
-                // create String from data and validate JSON structure
-                Log.d("BMW", "Data In = " + new String(buffer).trim());
-                String strBuffer = new String(buffer).trim();
-                if(!isJSONValid(strBuffer)) {
-                    continue;
-                }
+                String strBuffer = new String(buffer, 0, bytes).trim();
+                validateJSON(strBuffer);
 
-                // parse received data
+                Log.d("BMW", "Data In (length " + bytes + ") = " + strBuffer.substring(0, Math.min(strBuffer.length(), 100)) + "...");
+
                 ControllerMessage msg = new Gson().fromJson(strBuffer, ControllerMessage.class);
-                for(final IBUSPacket ibPacket : msg.getIBUSPackets()){
-                    BluetoothInterface.mActivity.runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            IBUSWrapper.processPacket(ibPacket);
-                        }
-                    });
+                List<IBUSPacket> newPackets = new ArrayList<>();
+                for (final IBUSPacket ibPacket : msg.getIBUSPackets()) {
+                    newPackets.add(ibPacket);
+                }
+                // Trigger the callback
+                if (BluetoothInterface.mIBUSPacketListener != null) {
+                    BluetoothInterface.mIBUSPacketListener.onIBUSPacketsReceived(newPackets);
                 }
 
+            } catch (InvalidJSONException e) {
+                Log.e("BMW", "Invalid JSON received: " + e.getMessage(), e);
+                // Consider if you want to continue or break here
             } catch (IOException e) {
-                Log.d("BMW", "Error reading: " + String.valueOf(e.getMessage()));
-                break;
+                Log.e("BMW", "Error reading from Bluetooth: " + e.getMessage(), e);
+                BluetoothInterface.checkConnection();
+                // Consider retrying a few times before giving up
+                // Or notify the user about the error
+                break; // Or return, depending on your error handling strategy
             }
         }
     }
 
     /**
-     * Returns true or false is provided string input is JSON parsable.
+     * Validates if the provided string input is JSON parsable.
+     *
+     * @param json The string to validate.
+     * @throws InvalidJSONException If the JSON is invalid or empty.
      */
-    private boolean isJSONValid(String json) {
+    private void validateJSON(String json) throws InvalidJSONException {
+        if (json == null || json.trim().isEmpty()) {
+            throw new InvalidJSONException("JSON string is empty or null", null);
+        }
         try {
-            new JsonParser().parse(json);
-            return true;
+            JsonParser.parseString(json);
         } catch (JsonSyntaxException jse) {
-            return false;
+            throw new InvalidJSONException("Invalid JSON syntax", jse);
         }
     }
 }
-

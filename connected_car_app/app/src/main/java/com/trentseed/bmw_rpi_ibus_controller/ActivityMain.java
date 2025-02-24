@@ -53,12 +53,13 @@ public class ActivityMain extends AppCompatActivity {
     ImageView ivBtnNew3;
     ImageView ivBtnGear;
     ImageView ivBtnVoice;
+    private ImageView ivBluetoothStatus;
     ProgressBar pbConnecting;
     TextView tvDateTime;
 
     BroadcastReceiver _broadcastReceiver;
     private ActivityResultLauncher<Intent> speechRecognizerLauncher;
-    SimpleDateFormat _sdfWatchTime = new SimpleDateFormat("hh:mm", Locale.ENGLISH);
+    SimpleDateFormat _sdfWatchTime = new SimpleDateFormat("HH:mm", Locale.ENGLISH);
     SimpleDateFormat _sdfWatchDate = new SimpleDateFormat("dd/MM", Locale.ENGLISH);
 
     private static final Logger logger = LogConfig.getLogger();
@@ -112,6 +113,7 @@ public class ActivityMain extends AppCompatActivity {
         ivBtnNew3 = findViewById(R.id.ivBtnNew3);
         ivBtnVoice = findViewById(R.id.ivBtnMic);
         ivBtnGear = findViewById(R.id.ivBtnGear);
+        ivBluetoothStatus = findViewById(R.id.ivBluetoothStatus);
         pbConnecting = findViewById(R.id.pbBluetoothConnecting);
         tvDateTime = findViewById(R.id.tvDateTime);
 
@@ -219,6 +221,14 @@ public class ActivityMain extends AppCompatActivity {
             unregisterReceiver(_broadcastReceiver);
     }
 
+    private void updateBluetoothStatus() {
+        if (BluetoothInterface.isConnected()) {
+            ivBluetoothStatus.setImageResource(R.drawable.ic_bluetooth_connected);
+        } else {
+            ivBluetoothStatus.setImageResource(R.drawable.ic_bluetooth_disabled);
+        }
+    }
+
     public void setDateTime() {
         Date now = new Date();
         String date = _sdfWatchDate.format(now);
@@ -253,6 +263,7 @@ public class ActivityMain extends AppCompatActivity {
                         showToast("Unable to connect via bluetooth :(");
                     }
                 });
+                updateBluetoothStatus();
             }
         });
     }

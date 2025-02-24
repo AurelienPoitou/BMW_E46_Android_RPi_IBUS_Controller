@@ -57,6 +57,7 @@ class BluetoothInterface(BaseInterface):
         """
         Starts bluetooth interfaces
         """
+        self.perform_hci0_reset()
         # prepare bluetooth server
         self.server_sock = BluetoothSocket(RFCOMM)
         self.server_sock.bind(("", PORT_ANY))
@@ -73,8 +74,10 @@ class BluetoothInterface(BaseInterface):
                 profiles=[SERIAL_PORT_PROFILE]
             )
         except:
-            LOGGER.exception("[ERROR] failed to advertise service")
-            return
+            LOGGER.exception("[ERROR] failed to advertise service, retrying in 10 seconds...")
+            time.sleep(10)
+            self.state = self.__states__.STATE_READY
+            self.listen_for_serial_connection()
 
         LOGGER.info('waiting for connection on RFCOMM channel %d', self.rfcomm_channel)
 
@@ -110,7 +113,7 @@ class BluetoothInterface(BaseInterface):
         try:
             LOGGER.info('performing hci0 down/up...')
             subprocess.Popen('hciconfig hci0 down', shell=True).communicate()
-            subprocess.Popen('hciconfig hci0 up', shell=True).communicate()
+            subprocess.Popen('hciconfig hci0 up piscan', shell=True).communicate()
             LOGGER.info('hci0 down/up has completed')
         except Exception as exception:
             LOGGER.exception("Failed to restart hci0 - %r", exception)

@@ -63,6 +63,7 @@ class IBUSInterface(BaseInterface):
         except serial.serialutil.SerialException:
             LOGGER.exception('failed to establish serial connection, retrying in 10 seconds...')
             time.sleep(10)
+            #self.receive(b'\x80\x05\xbf\x18\x08\x0f\x25\x80\x06\xbf\x19\x0a\x5d\x00\x77\xf0\x03\x68\x01\x9a\x68\x04\xf0\x02\x00\x9e\xd0\x07\xbf\x5b\x23\x00\x04\x00\x14\x3b\x03\x80\x01\xb9\x80\x04\xbf\x02\x00\x00\x39')
             self.state = self.__states__.STATE_READY
             self.listen_for_serial_connection()
 
@@ -209,7 +210,7 @@ class IBUSPacket(dict):
         data_end = data_start + self['length'] - 2
 
         self['data'] = bytes[data_start:data_end]
-        self['xor_checksum'] = bytes[-1:]
+        self['xor_checksum'] = bytes[-1]
         self['raw'] = bytes
         self['timestamp'] = int(time.time())
 
@@ -246,28 +247,73 @@ class IBUSPacket(dict):
 
         device_names = {
             0x00: "Broadcast",
+            0x08: "Tilt/Slide Sunroof (SHD)",
+            0x10: "Engine Management",
+            0x11: "Central Body Electronics (ZKE1, ZKE2)",
+            0x12: "Engine Management",
+            0x13: "Engine Management",
+            0x14: "Engine Management",
+            0x15: "Double Sunroof (DDSHD) [E34]",
+            0x16: "Thermal Level Oil Sensor [E36]",
             0x18: "CDW - CDC CD-Player",
-            0x30: "?????",
+            0x19: "Rover Automatic Transmission Control Unit",
+            0x20: "Electronic Engine Power Control (EML) [M70]",
+            0x21: "Central Locking Module [E34, E36]",
+            0x22: "Electronic Engine Power Control (EML) [M73]",
+            0x23: "?????",
+            0x24: "Trunk Lid Module (HKM) [E38]",
+            0x28: "Radio Controlled Clock (RCC)",
+            0x2e: "Electronic Damper Control (EDC)",
+            0x30: "Seat Memory",
+            0x31: "MINI EHPR50",
+            0x32: "Transmission",
+            0x35: "Steering Column Memory (LSM) [E31/E32/E34]",
             0x3b: "NAV Navigation/Video Module",
-            0x3f: "?????",
+            0x3f: "Diagnostics",
+            0x40: "Remote Control for Central Locking",
             0x43: "Menu Screen",
-            0x44: "?????",
+            0x44: "Drive Away Protection System (EWS)",
+            0x45: "Anti-Theft System (DWA)",
+            0x46: "Central Information Display (CID) [E83/E85]",
+            0x47: "Rear Compartment Monitor (RCM)",
+            0x48: "Telephone (Japan)",
             0x50: "MFL Multi Functional Steering Wheel Buttons",
+            0x51: "Mirror Memory: Passenger (ZKE5)",
+            0x5b: "Automatic Heating/Air Conditioning (IHKA)",
             0x60: "PDC Park Distance Control",
+            0x66: "Active Light Control (ALC)",
             0x68: "RAD Radio",
+            0x69: "Body Module [E31]",
             0x6a: "DSP Digital Sound Processor",
-            0x7f: "?????",
+            0x6b: "Auxiliary Heating 'Webasto' (D-Bus?)",
+            0x70: "Tire Pressure Control/Warning (RDC)",
+            0x71: "Mirror Memory: Driver (ZKE5)",
+            0x72: "Seat Memory: Driver (ZKE5)",
+            0x76: "CD Player (Business)",
+            0x7f: "Navigation",
             0x80: "IKE Instrument Kombi Electronics",
+            0x9a: "Automatic Headlight Vertical Aim Control (LWR)",
+            0xa0: "Rear Multi-information Display (MID) [E38]",
+            0xa4: "Multiple Restraint System (MRS)",
+            0xa7: "Rear Compartment Heating/Air Conditioning",
+            0xac: "Electronic Height Control (EHC)",
             0xa8: "?????",
+            0xb0: "Speech Recognition System (SES)",
+            0xb9: "Compact Remote Control (RF/IR)",
             0xbb: "TV Module",
             0xbf: "LCM Light Control Module",
             0xc0: "MID Multi-Information Display Buttons",
             0xc8: "TEL Telephone",
+            0xcd: "Multi Information Display (OBC) [E31]",
             0xd0: "Navigation Location",
+            0xda: "Seat Memory: Passenger (ZKE5)",
+            0xe0: "Integrated Radio and Information System (IRIS)",
             0xe7: "OBC Text Bar",
-            0xe8: "?????",
+            0xe8: "Rain/Driving Light Sensor (RLS)",
+            0xea: "DSP Controller [E38]",
             0xed: "Lights, Wipers, Seat Memory",
             0xf0: "BMB Board Monitor Buttons",
+            0xf5: "Lamp Control Module [E31]",
             0xff: "Broadcast",
         }
 
@@ -281,7 +327,7 @@ class IBUSPacket(dict):
         structure.
 
         Python bytearray objects are not JSON serializable, so this function
-        will return the expected object, and hexlifies the bytearrays.
+        will convert it to a list of int.
 
         Returns
         -------
@@ -290,12 +336,7 @@ class IBUSPacket(dict):
 
         """
         return {
-            'source_id': binascii.hexlify(self['source_id']),
-            'length': binascii.hexlify(self['length']),
-            'destination_id': binascii.hexlify(self['destination_id']),
-            'data': binascii.hexlify(self['data']),
-            'xor_checksum': binascii.hexlify(self['xor_checksum']),
-            'raw': binascii.hexlify(self['raw']),
+            'raw': [int(byte) for byte in self['raw']],
             'timestamp': self['timestamp']
         }
 
@@ -315,4 +356,4 @@ class IBUSPacket(dict):
         for key in self['raw'][:-1]:
             checksum = checksum ^ key
 
-        return chr(checksum)
+        return checksum

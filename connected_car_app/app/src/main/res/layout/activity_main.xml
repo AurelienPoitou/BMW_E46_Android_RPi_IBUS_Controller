@@ -29,6 +29,19 @@
         android:paddingBottom="30dp"
         android:src="@drawable/gear" />
 
+    <ImageView
+        android:id="@+id/ivBluetoothStatus"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentRight="true"
+        android:layout_gravity="right"
+        android:layout_weight="0"
+        android:paddingRight="30dp"
+        android:paddingTop="30dp"
+        android:src="@drawable/ic_bluetooth_disabled"
+        android:contentDescription="Bluetooth Status" />
+
     <LinearLayout
         android:id="@+id/llHorizontalWrapper"
         android:layout_width="match_parent"
