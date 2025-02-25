@@ -63,11 +63,19 @@ class IBUSInterface(BaseInterface):
                 LOGGER.info('Serial connection established.')
                 self.consume_bus()
                 break  # Exit the loop if connection is successful
-            except serial.serialutil.SerialException:
-                LOGGER.exception('Failed to establish serial connection, retrying in 10 seconds...')
+            except serial.serialutil.SerialException as e:
+                if "No such file or directory" in str(e):
+                    LOGGER.error(f"Failed to open serial port {self.port}: The device file does not exist. "
+                                 f"Please ensure the IBUS adapter is connected and the port is correct.")
+                else:
+                    LOGGER.error(f'Failed to establish serial connection on port {self.port}, retrying in 10 seconds...')
+                time.sleep(10)
+            except FileNotFoundError as e:
+                LOGGER.error(f"Failed to open serial port {self.port}: The device file does not exist. "
+                             f"Please ensure the IBUS adapter is connected and the port is correct.")
                 time.sleep(10)
             except Exception as e:
-                LOGGER.exception(f"An unexpected error occurred: {e}")
+                LOGGER.error(f"An unexpected error occurred: {e}")
                 time.sleep(10)
 
     def consume_bus(self):
