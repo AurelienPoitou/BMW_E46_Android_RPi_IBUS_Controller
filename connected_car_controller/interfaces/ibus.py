@@ -69,6 +69,7 @@ class IBUSInterface(BaseInterface):
                                  f"Please ensure the IBUS adapter is connected and the port is correct.")
                 else:
                     LOGGER.error(f'Failed to establish serial connection on port {self.port}, retrying in 10 seconds...')
+                #self.receive(b'\x80\x05\xbf\x18\x08\x0f\x25\x80\x06\xbf\x19\x0a\x5d\x00\x77\xf0\x03\x68\x01\x9a\x68\x04\xf0\x02\x00\x9e\xd0\x07\xbf\x5b\x23\x00\x04\x00\x14\x3b\x03\x80\x01\xb9\x80\x04\xbf\x02\x00\x39')
                 time.sleep(10)
             except FileNotFoundError as e:
                 LOGGER.error(f"Failed to open serial port {self.port}: The device file does not exist. "

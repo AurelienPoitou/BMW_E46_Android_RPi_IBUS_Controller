@@ -18,6 +18,8 @@ class BluetoothInterface(BaseInterface):
     """The Bluetooth interface definition for communication with wireless client devices."""
 
     __interface_name__ = 'bluetooth'
+    HEARTBEAT_INTERVAL = 5  # seconds
+    HEARTBEAT_MESSAGE = {"type": "heartbeat"}
 
     def __init__(self, controller):
         """
@@ -40,14 +42,16 @@ class BluetoothInterface(BaseInterface):
         self.thread = None
         self.read_buffer_length = self.get_setting('read_buffer_length', int)
         self.is_running = False
+        self.heartbeat_thread = None
 
     def connect(self):
         """Creates a new thread that listens for an incoming bluetooth RFCOMM connection."""
-        LOGGER.info('creating thread for bluetooth interface...')
-        self.is_running = True
-        self.thread = threading.Thread(target=self.listen_for_rfcomm_connection)
-        self.thread.daemon = True
-        self.thread.start()
+        if self.thread is None or not self.thread.is_alive():
+            LOGGER.info('creating thread for bluetooth interface...')
+            self.is_running = True
+            self.thread = threading.Thread(target=self.listen_for_rfcomm_connection)
+            self.thread.daemon = True
+            self.thread.start()
 
     def listen_for_rfcomm_connection(self):
         """
@@ -55,6 +59,7 @@ class BluetoothInterface(BaseInterface):
         """
         while self.is_running:
             try:
+                # reset the bluetooth interface
                 self.perform_hci0_reset()
                 # prepare bluetooth server
                 self.server_sock = BluetoothSocket(RFCOMM)
@@ -79,8 +84,8 @@ class BluetoothInterface(BaseInterface):
                 LOGGER.info('accepted connection from %r', self.client_info)
 
                 # start listening for data
+                self.start_heartbeat()
                 self.consume_bus()
-                break
             except Exception:
                 LOGGER.exception("[ERROR] failed to establish bluetooth connection, retrying in 10 seconds...")
                 time.sleep(10)
@@ -88,17 +93,18 @@ class BluetoothInterface(BaseInterface):
                 if self.server_sock:
                     self.server_sock.close()
                 self.server_sock = None
+                if self.client_sock:
+                    self.client_sock.close()
+                self.client_sock = None
 
     def disconnect(self):
         """
         Closes Bluetooth connection and resets handle
         """
         LOGGER.info('destroying bluetooth interface...')
-        self.is_running = False
         self.state = self.__states__.STATE_DISCONNECTING
-        if self.thread:
-            self.thread.join(timeout=5)
-            self.thread = None
+        self.is_running = False
+        self.stop_heartbeat()
         try:
             if self.client_sock:
                 self.client_sock.close()
@@ -114,9 +120,10 @@ class BluetoothInterface(BaseInterface):
         finally:
             self.server_sock = None
 
-        # reset the bluetooth interface
-        self.perform_hci0_reset()
         self.state = self.__states__.STATE_READY
+        if self.thread and self.thread.is_alive() and self.thread != threading.current_thread():
+            self.thread.join(timeout=1)
+            self.thread = None
 
     @staticmethod
     def perform_hci0_reset():
@@ -142,6 +149,8 @@ class BluetoothInterface(BaseInterface):
         try:
             decoded_data = data.decode('utf-8')
             packet = json.loads(decoded_data)
+            if packet.get("type") == "heartbeat_ack":
+                return
             LOGGER.info('received packet via bluetooth: %r', packet['data'])
 
             # invoke bound method (if set)
@@ -196,9 +205,36 @@ class BluetoothInterface(BaseInterface):
 
             while self.is_running and self.client_sock:
                 data = self.client_sock.recv(self.read_buffer_length)
-                if data:
-                    self.receive(data)
+                if not data:
+                    LOGGER.warning("No data received. Connection closed by peer")
+                    self.reconnect()
+                    break
+                self.receive(data)
 
         except Exception as exception:
-            LOGGER.exception('android device was disconnected - %r', exception)
+            LOGGER.exception('consume_bus exception - %r', exception)
             self.reconnect()
+
+    def start_heartbeat(self):
+        """Starts the heartbeat thread."""
+        if self.heartbeat_thread is None or not self.heartbeat_thread.is_alive():
+            self.heartbeat_thread = threading.Thread(target=self._heartbeat_loop)
+            self.heartbeat_thread.daemon = True
+            self.heartbeat_thread.start()
+
+    def stop_heartbeat(self):
+        """Stops the heartbeat thread."""
+        if self.heartbeat_thread and self.heartbeat_thread.is_alive():
+            self.heartbeat_thread.join(timeout=1)
+            self.heartbeat_thread = None
+
+    def _heartbeat_loop(self):
+        """Sends heartbeat messages periodically."""
+        while self.is_running and self.client_sock:
+            try:
+                self.client_sock.send(json.dumps(self.HEARTBEAT_MESSAGE))
+                time.sleep(self.HEARTBEAT_INTERVAL)
+            except Exception as e:
+                LOGGER.error(f"Error sending heartbeat: {e}")
+                self.reconnect()
+                break  # Exit the loop on error

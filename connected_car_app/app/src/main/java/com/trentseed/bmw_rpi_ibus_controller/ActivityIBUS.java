@@ -4,53 +4,58 @@ import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.os.Bundle;
 import android.view.View;
-import android.view.Window;
-import android.view.WindowManager;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
-import android.view.animation.Animation.AnimationListener;
-import android.widget.AbsListView;
-import android.widget.AdapterView;
 import android.widget.ImageView;
-import android.widget.ListView;
 import android.widget.TextView;
 
-import androidx.fragment.app.FragmentActivity;
-import androidx.lifecycle.ViewModelProvider;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
+import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothDataHolder;
 import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothInterface;
 import com.trentseed.bmw_rpi_ibus_controller.common.IBUSPacket;
-import com.trentseed.bmw_rpi_ibus_controller.common.IBUSPacketListener;
-import com.trentseed.bmw_rpi_ibus_controller.common.IBUSWrapper;
+import com.trentseed.bmw_rpi_ibus_controller.common.LogConfig;
 
-import java.util.List;
+import java.util.logging.Logger;
 
-public class ActivityIBUS extends FragmentActivity implements IBUSPacketListener {
+public class ActivityIBUS extends AppCompatActivity implements BluetoothInterface.IBUSPacketListener, AdapterIBUS.OnItemClickListener {
 
-	// layout objects
-	ImageView ivBack;
-	ImageView ivBusActivity;
-	ListView lvBusEvents;
-	TextView tvNoActivity;
-	AdapterIBUS adapter;
-	IBUSViewModel ibusViewModel;
+	private BluetoothInterface mBluetoothInterface;
+	private static final Logger logger = LogConfig.getLogger();
+	private ImageView ivBack;
+	private ImageView ivBusActivity;
+	private RecyclerView rvIBUSPackets;
+	private AdapterIBUS adapterIBUS;
+	private TextView tvNoActivity;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		requestWindowFeature(Window.FEATURE_NO_TITLE);
-		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-		onNewIntent(getIntent());
 		setContentView(R.layout.activity_ibus);
-		BluetoothInterface.mActivity = this;
+		logger.info("onCreate: Activity created");
+		mBluetoothInterface = BluetoothInterface.getInstance();
 
-		// get layout objects
 		ivBack = findViewById(R.id.ivBack);
 		ivBusActivity = findViewById(R.id.ivBusActivity);
 		ivBusActivity.setVisibility(View.GONE);
-		lvBusEvents = findViewById(R.id.lvBusEvents);
+
+		// RecyclerView setup
+		rvIBUSPackets = findViewById(R.id.rvIBUSPackets);
+		rvIBUSPackets.setLayoutManager(new LinearLayoutManager(this));
+		adapterIBUS = new AdapterIBUS(this);
+		adapterIBUS.addPackets(BluetoothDataHolder.INSTANCE.getReceivedPackets());
+		rvIBUSPackets.setAdapter(adapterIBUS);
+
+		// Activity indicator setup
 		tvNoActivity = findViewById(R.id.tvNoActivity);
+		if (adapterIBUS.getItemCount() == 0) {
+			tvNoActivity.setVisibility(View.VISIBLE); // Initially show the indicator
+		} else {
+			tvNoActivity.setVisibility(View.GONE);
+		}
 
 		// set click handlers
 		ivBack.setOnClickListener(new View.OnClickListener() {
@@ -59,38 +64,45 @@ public class ActivityIBUS extends FragmentActivity implements IBUSPacketListener
 				finish();
 			}
 		});
+	}
 
-		// Get the ViewModel
-		ibusViewModel = new ViewModelProvider(this).get(IBUSViewModel.class); // Correct now
+	@Override
+	protected void onResume() {
+		super.onResume();
+		// Set the listener in onResume to ensure it's set when the activity is active
+		BluetoothInterface.mIBUSPacketListener = this;
+		mBluetoothInterface.connectToRaspberryPi();
+	}
 
-		// create and set adapter
-		adapter = new AdapterIBUS(this, ibusViewModel.getIBUSPackets().getValue());
-		lvBusEvents.setAdapter(adapter);
-		if (adapter.getCount() > 0) tvNoActivity.setVisibility(View.GONE);
-		lvBusEvents.setOnItemClickListener(new AbsListView.OnItemClickListener() {
-			@Override
-			public void onItemClick(AdapterView<?> arg0, View arg1, int position, long arg3) {
-				IBUSPacket ibPacket = adapter.getItem(position);
-				AlertDialog.Builder msgBuilder = new AlertDialog.Builder(ActivityIBUS.this);
-				msgBuilder.setTitle("IBUS Packet");
-				msgBuilder.setMessage("Data: " + ibPacket.raw + "\nASCII: " + ibPacket.getAsciiFromRaw());
-				msgBuilder.setPositiveButton("Done", new DialogInterface.OnClickListener() {
-					@Override
-					public void onClick(DialogInterface dialog, int which) {
-					}
-				});
-				msgBuilder.create().show();
+	@Override
+	protected void onPause() {
+		super.onPause();
+		// Remove the listener when the activity is paused
+		BluetoothInterface.mIBUSPacketListener = null;
+	}
 
-			}
-		});
+	@Override
+	protected void onDestroy() {
+		super.onDestroy();
+	}
 
-		// Observe the LiveData
-		ibusViewModel.getIBUSPackets().observe(this, packets -> {
-			// This code will run on the UI thread
-			adapter.setIbusPackets(packets);
-			adapter.notifyDataSetChanged();
+	@Override
+	public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+		mBluetoothInterface.onRequestPermissionsResult(requestCode, permissions, grantResults);
+	}
+
+	@Override
+	public void onIBUSPacketReceived(String data) {
+		runOnUiThread(() -> {
+			adapterIBUS.clearPackets();
+			adapterIBUS.addPackets(BluetoothDataHolder.INSTANCE.getReceivedPackets());
 			flashActivity();
-			if (adapter.getCount() > 0) tvNoActivity.setVisibility(View.GONE);
+			if (adapterIBUS.getItemCount() == 0) {
+				tvNoActivity.setVisibility(View.VISIBLE); // Initially show the indicator
+			} else {
+				tvNoActivity.setVisibility(View.GONE);
+			}
 		});
 	}
 
@@ -103,24 +115,26 @@ public class ActivityIBUS extends FragmentActivity implements IBUSPacketListener
 		Animation fadeIn = new AlphaAnimation(0, 1);
 		fadeIn.setInterpolator(new AccelerateInterpolator());
 		fadeIn.setDuration(300);
-		fadeIn.setAnimationListener(new AnimationListener() {
+		fadeIn.setAnimationListener(new Animation.AnimationListener() {
 			public void onAnimationEnd(Animation animation) {
 				// fade out animation
 				Animation fadeOut = new AlphaAnimation(1, 0);
 				fadeOut.setInterpolator(new AccelerateInterpolator());
 				fadeOut.setDuration(300);
-				fadeOut.setAnimationListener(new AnimationListener() {
-					public void onAnimationEnd(Animation animation) {
-						ivBusActivity.setVisibility(View.GONE);
+				fadeOut.setAnimationListener(new Animation.AnimationListener() {
+					public void onAnimationStart(Animation animation) {
 					}
 
 					public void onAnimationRepeat(Animation animation) {
 					}
 
-					public void onAnimationStart(Animation animation) {
+					public void onAnimationEnd(Animation animation) {
+						ivBusActivity.setVisibility(View.GONE);
+					}
+
+					public void onAnimationCancel(Animation animation) {
 					}
 				});
-				ivBusActivity.setVisibility(View.VISIBLE);
 				ivBusActivity.startAnimation(fadeOut);
 			}
 
@@ -129,27 +143,24 @@ public class ActivityIBUS extends FragmentActivity implements IBUSPacketListener
 
 			public void onAnimationStart(Animation animation) {
 			}
+
+			public void onAnimationCancel(Animation animation) {
+			}
 		});
 		ivBusActivity.startAnimation(fadeIn);
 	}
 
 	@Override
-	protected void onResume() {
-		super.onResume();
-		BluetoothInterface.mActivity = this;
-		BluetoothInterface.setIBUSPacketListener(this); // Set the listener
-		BluetoothInterface.checkConnection();
-	}
-
-	@Override
-	public void onIBUSPacketsReceived(List<IBUSPacket> packets) {
-		runOnUiThread(() -> {
-			// Process the packets
-			for (final IBUSPacket ibPacket : packets) {
-				IBUSWrapper.processPacket(ibPacket);
+	public void onItemClick(IBUSPacket packet) {
+		logger.info(packet.getAsciiFromRaw());
+		AlertDialog.Builder msgBuilder = new AlertDialog.Builder(ActivityIBUS.this);
+		msgBuilder.setTitle("IBUS Packet");
+		msgBuilder.setMessage("Data: " + packet.raw + "\nASCII: " + packet.getAsciiFromRaw());
+		msgBuilder.setPositiveButton("Done", new DialogInterface.OnClickListener() {
+			@Override
+			public void onClick(DialogInterface dialog, int which) {
 			}
-			// Add the packets to the ViewModel
-			ibusViewModel.addIBUSPackets(packets);
 		});
+		msgBuilder.create().show();
 	}
 }

@@ -10,7 +10,6 @@ import android.widget.ImageView;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothInterface;
 import com.trentseed.bmw_rpi_ibus_controller.common.IBUSWrapper;
 
 import java.util.ArrayList;
@@ -28,7 +27,6 @@ public class ActivityDevices extends Activity {
 		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 		onNewIntent(getIntent());
 		setContentView(R.layout.activity_devices);
-		BluetoothInterface.mActivity = this;
 
         // data to populate the RecyclerView with
         ArrayList<AdapterDevices.Device> deviceNames = this.getDevicesForAdapter();
@@ -54,7 +52,6 @@ public class ActivityDevices extends Activity {
 	@Override
 	protected void onResume(){
 		super.onResume();
-		BluetoothInterface.mActivity = this;
 		// BluetoothInterface.checkConnection();  // TODO uncomment
 	}
 

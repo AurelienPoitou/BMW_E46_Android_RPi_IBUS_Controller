@@ -30,14 +30,11 @@
                 android:name="android.hardware.usb.action.USB_ACCESSORY_ATTACHED"
                 android:resource="@xml/accessory_filter" />
         </activity>
-        <activity android:name=".ActivityIBUS"
-            android:theme="@android:style/Theme.Wallpaper"/>
-        <activity android:name=".ActivityRadio"
-            android:theme="@android:style/Theme.Wallpaper"/>
+        <activity android:name=".ActivityIBUS"/>
+        <activity android:name=".ActivityRadio"/>
         <!--activity android:name=".ActivityStatus"
             android:theme="@android:style/Theme.Wallpaper"/-->
-        <activity android:name=".ActivityDevices"
-            android:theme="@android:style/Theme.Wallpaper"/>
+        <activity android:name=".ActivityDevices"/>
     </application>
 
 </manifest>

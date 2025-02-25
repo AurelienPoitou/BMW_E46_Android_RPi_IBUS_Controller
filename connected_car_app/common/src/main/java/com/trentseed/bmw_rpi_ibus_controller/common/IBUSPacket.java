@@ -1,7 +1,12 @@
 package com.trentseed.bmw_rpi_ibus_controller.common;
 
 import java.text.Normalizer;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * IBUS "packet" that is sent between BMW and Raspberry Pi
@@ -81,11 +86,34 @@ public class IBUSPacket {
         return normalized.replace(" CAP", " CA");  // extra data to remove
     }
 
-    public int getSourceId() {
-        return raw.get(0);
+    public String getHexFromRaw(){
+        return toPaddedHexString(raw);
     }
 
-    public int getDestinationId() {
-        return raw.get(2);
+    public static String toPaddedHexString(List<Integer> numbers) {
+        return numbers.stream()
+                .map(IBUSPacket::toPaddedHex)
+                .collect(Collectors.joining(" "));
+    }
+
+    private static String toPaddedHex(int number) {
+        String hex = Integer.toHexString(number).toUpperCase();
+        return String.format("%02X", number);
+    }
+
+    public String getTime() {
+        return IBUSPacket.convertTimestampToDateTime(timestamp);
+    }
+
+    private static String convertTimestampToDateTime(long timestamp) {
+        // Convert the timestamp to an Instant
+        Instant instant = Instant.ofEpochSecond(timestamp);
+
+        // Convert the Instant to a LocalDateTime (using the system's default time zone)
+        LocalDateTime dateTime = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+
+        // Format the LocalDateTime to a human-readable string
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss");
+        return dateTime.format(formatter);
     }
 }

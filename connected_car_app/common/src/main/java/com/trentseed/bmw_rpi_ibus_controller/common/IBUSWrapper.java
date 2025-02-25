@@ -26,15 +26,6 @@ public class IBUSWrapper {
      * BMW --(IBUS USB)--> RaspberryPi --(Bluetooth)--> Android
      */
     public static void processPacket(IBUSPacket ibPacket){
-        // add packet to local buffer (IBUS activity displays buffer)
-        int max_buffer = 20;
-        BluetoothInterface.mArrayListIBUSActivity.add(0, ibPacket);
-        if(BluetoothInterface.mArrayListIBUSActivity.size() > max_buffer){
-            BluetoothInterface.mArrayListIBUSActivity.remove(
-                BluetoothInterface.mArrayListIBUSActivity.size()-1
-            );
-        }
-
         // check for special packets
         if(ibPacket.raw.equals(KEY_INSERTED)){
             // special packet - key inserted
@@ -58,10 +49,10 @@ public class IBUSWrapper {
      */
     private static void sendMessage(ControllerMessage data){
         try {
-            if(BluetoothInterface.isConnected()){
+            if(BluetoothInterface.getInstance().isConnected()){
                 Log.d("BMW", "writing bytes to output stream...");
                 byte[] bytes = new Gson().toJson(data).getBytes();
-                BluetoothInterface.mBluetoothOutputStream.write(bytes);
+                BluetoothInterface.getInstance().sendData(new String(bytes));
             }else{
                 Log.d("BMW", "cannot write bytes, not connected.");
             }

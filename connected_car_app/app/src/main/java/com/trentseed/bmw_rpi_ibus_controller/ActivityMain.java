@@ -8,6 +8,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.speech.RecognizerIntent;
@@ -22,7 +23,10 @@ import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
+import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothConnectionManager;
 import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothHelper;
 import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothInterface;
 import com.trentseed.bmw_rpi_ibus_controller.common.LogConfig;
@@ -34,15 +38,13 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 
 /**
  * Activity that handles presents core functionality to user.
  * @author Trent
  */
-public class ActivityMain extends AppCompatActivity {
+public class ActivityMain extends AppCompatActivity implements BluetoothConnectionManager.ConnectionListener {
 
     ImageView ivBmwEmblem;
     ImageView ivBtnRadio;
@@ -64,6 +66,8 @@ public class ActivityMain extends AppCompatActivity {
 
     private static final Logger logger = LogConfig.getLogger();
     private BluetoothHelper bluetoothHelper;
+    private BluetoothInterface mBluetoothInterface;
+    private static final int REQUEST_BLUETOOTH_PERMISSIONS = 1;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -77,31 +81,6 @@ public class ActivityMain extends AppCompatActivity {
         LogConfig.configure(logDir);
 
         logger.info("onCreate: Activity created");
-
-        bluetoothHelper = new BluetoothHelper(this);
-        BluetoothInterface.mBluetoothHelper = bluetoothHelper;
-
-        if (!bluetoothHelper.isBluetoothSupported()) {
-            showToast("Bluetooth is not supported on this device");
-            return;
-        }
-
-        ActivityResultLauncher<Intent> enableBtLauncher = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(),
-                result -> {
-                    if (result.getResultCode() == RESULT_OK) {
-                        showToast("Bluetooth enabled");
-                    } else {
-                        showToast("Bluetooth not enabled");
-                    }
-                }
-        );
-
-        if (!bluetoothHelper.isBluetoothEnabled()) {
-            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
-            enableBtLauncher.launch(enableBtIntent);
-        }
-        BluetoothInterface.mActivity = this;
 
         // get layout objects
         ivBmwEmblem = findViewById(R.id.ivBMWEmblem);
@@ -118,11 +97,6 @@ public class ActivityMain extends AppCompatActivity {
         tvDateTime = findViewById(R.id.tvDateTime);
 
         // bind click handlers to layout objects
-        ivBmwEmblem.setOnClickListener(v -> {
-            if (!BluetoothInterface.isConnected() && !BluetoothInterface.isConnecting) {
-                performBackgroundConnect();
-            }
-        });
         ivBtnMaps.setOnClickListener(v -> {
             // launch Google Maps
             String uri = "http://maps.google.com/maps";
@@ -173,6 +147,28 @@ public class ActivityMain extends AppCompatActivity {
             startActivity(launchWindows);
         });
 
+        bluetoothHelper = new BluetoothHelper(this);
+        if (!bluetoothHelper.checkBluetoothPermissions()) {
+            bluetoothHelper.requestBluetoothPermissions(this);
+        } else {
+            initializeBluetooth();
+        }
+
+        ActivityResultLauncher<Intent> enableBtLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK) {
+                        showToast("Bluetooth enabled");
+                    } else {
+                        showToast("Bluetooth not enabled");
+                    }
+                }
+        );
+        if (!bluetoothHelper.isBluetoothEnabled()) {
+            Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
+            enableBtLauncher.launch(enableBtIntent);
+        }
+
         // check if bluetooth enabled (prompt to enable)
         refreshConnectingStatus();
 
@@ -180,24 +176,42 @@ public class ActivityMain extends AppCompatActivity {
         setDateTime();
     }
 
+    private void initializeBluetooth() {
+        mBluetoothInterface = BluetoothInterface.getInstance(this, this);
+        mBluetoothInterface.connectToRaspberryPi();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_BLUETOOTH_PERMISSIONS) {
+            boolean allPermissionsGranted = true;
+            for (int grantResult : grantResults) {
+                if (grantResult != PackageManager.PERMISSION_GRANTED) {
+                    allPermissionsGranted = false;
+                    break;
+                }
+            }
+            if (allPermissionsGranted) {
+                initializeBluetooth();
+            } else {
+                Toast.makeText(this, "Bluetooth permissions are required to connect to the Raspberry Pi.", Toast.LENGTH_LONG).show();
+                onPermissionsDenied();
+            }
+        } else {
+            mBluetoothInterface.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        }
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
-        BluetoothInterface.mActivity = this;
-
-        if (!BluetoothInterface.isConnected()) {
-            performBackgroundConnect();
-        }
+        updateBluetoothStatus();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        try {
-            BluetoothInterface.disconnect();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
     }
 
     @Override
@@ -222,7 +236,7 @@ public class ActivityMain extends AppCompatActivity {
     }
 
     private void updateBluetoothStatus() {
-        if (BluetoothInterface.isConnected()) {
+        if (mBluetoothInterface != null && mBluetoothInterface.isConnected()) {
             ivBluetoothStatus.setImageResource(R.drawable.ic_bluetooth_connected);
         } else {
             ivBluetoothStatus.setImageResource(R.drawable.ic_bluetooth_disabled);
@@ -237,46 +251,24 @@ public class ActivityMain extends AppCompatActivity {
     }
 
     private void displaySpeechRecognizer() {
+        // Part 2: ActivityMain.java (Continued)
+        // ... (Code from previous response) ...
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         // Launch the speech recognizer activity
         speechRecognizerLauncher.launch(intent);
     }
 
-    private void performBackgroundConnect() {
-        BluetoothInterface.isConnecting = true;
-        refreshConnectingStatus();
-
-        ExecutorService executorService = Executors.newSingleThreadExecutor();
-        executorService.execute(() -> {
-            try {
-                logger.info("Checking connection in background thread");
-                BluetoothInterface.checkConnection();
-            } finally {
-                runOnUiThread(() -> {
-                    logger.info("connection on UI thread");
-                    BluetoothInterface.isConnecting = false;
-                    refreshConnectingStatus();
-                    if (BluetoothInterface.isConnected()) {
-                        showToast("Connected!");
-                    } else {
-                        showToast("Unable to connect via bluetooth :(");
-                    }
-                });
-                updateBluetoothStatus();
-            }
-        });
-    }
-
     /**
      * If Bluetooth connection is being established, show loader.
      */
     public void refreshConnectingStatus() {
-        if (BluetoothInterface.isConnecting()) {
-            pbConnecting.setVisibility(View.VISIBLE);
-        } else {
-            pbConnecting.setVisibility(View.GONE);
-        }
+        //TODO - add isConnecting to bluetooth interface
+        //if (BluetoothInterface.isConnecting()) {
+        //    pbConnecting.setVisibility(View.VISIBLE);
+        //} else {
+        //    pbConnecting.setVisibility(View.GONE);
+        //}
     }
 
     /**
@@ -286,5 +278,47 @@ public class ActivityMain extends AppCompatActivity {
      */
     public void showToast(String message) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
+
+    // --- BluetoothConnectionManager.ConnectionListener methods ---
+    @Override
+    public void onConnected() {
+        runOnUiThread(() -> {
+            Toast.makeText(this, "Bluetooth Connected", Toast.LENGTH_SHORT).show();
+            updateBluetoothStatus();
+            pbConnecting.setVisibility(View.GONE);
+        });
+    }
+
+    @Override
+    public void onDisconnected() {
+        runOnUiThread(() -> {
+            Toast.makeText(this, "Bluetooth Disconnected", Toast.LENGTH_SHORT).show();
+            updateBluetoothStatus();
+            pbConnecting.setVisibility(View.GONE);
+        });
+    }
+
+    @Override
+    public void onDataReceived(String data) {
+        runOnUiThread(() -> {
+            // ... (process received data) ...
+        });
+    }
+
+    @Override
+    public void onConnecting() {
+        runOnUiThread(() -> {
+            Toast.makeText(this, "Bluetooth Connecting...", Toast.LENGTH_SHORT).show();
+            pbConnecting.setVisibility(View.VISIBLE);
+        });
+    }
+
+    @Override
+    public void onPermissionsDenied() {
+        runOnUiThread(() -> {
+            Toast.makeText(this, "Bluetooth Permissions Denied", Toast.LENGTH_SHORT).show();
+            // ... (handle permission denial, e.g., show a message to the user) ...
+        });
     }
 }

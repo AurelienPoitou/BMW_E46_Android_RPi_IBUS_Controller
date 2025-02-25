@@ -8,7 +8,6 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.ImageView;
 
-import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothInterface;
 import com.trentseed.bmw_rpi_ibus_controller.common.IBUSWrapper;
 
 public class ActivityRadio extends Activity {
@@ -33,7 +32,6 @@ public class ActivityRadio extends Activity {
 		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 		onNewIntent(getIntent());
 		setContentView(R.layout.activity_radio);
-		BluetoothInterface.mActivity = this;
 		
 		// get layout objects
 		ivBack = findViewById(R.id.ivBack);
@@ -127,8 +125,6 @@ public class ActivityRadio extends Activity {
 	@Override
 	protected void onResume(){
 		super.onResume();
-		BluetoothInterface.mActivity = this;
-		BluetoothInterface.checkConnection();
 	}
 	
 }
