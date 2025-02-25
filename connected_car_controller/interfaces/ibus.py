@@ -5,11 +5,8 @@ import logging
 import time
 import threading
 import serial
-import binascii
-
-
+import serial.serialutil
 from interfaces.base import BaseInterface
-
 
 LOGGER = logging.getLogger(__name__)
 
@@ -29,7 +26,7 @@ class IBUSInterface(BaseInterface):
                 the parent controller that instantiated this interface
 
         """
-        super(IBUSInterface, self).__init__()
+        super().__init__()
         self.controller = controller
         self.baudrate = self.get_setting('baudrate', int)
         self.handle = None
@@ -37,10 +34,13 @@ class IBUSInterface(BaseInterface):
         self.port = self.get_setting('port')
         self.timeout = self.get_setting('timeout', int)
         self.thread = None
+        self.read_buffer_length = self.get_setting('read_buffer_length', int)
+        self.is_running = False
 
     def connect(self):
         """Create daemon thread to establish serial communication."""
         LOGGER.info('creating thread for %s interface...', self.__interface_name__)
+        self.is_running = True
         self.thread = threading.Thread(target=self.listen_for_serial_connection)
         self.thread.daemon = True
         self.thread.start()
@@ -49,54 +49,54 @@ class IBUSInterface(BaseInterface):
         """
         Connect to the vehicle via serial communication.
         """
-        # initialize serial port connection
-        try:
-            self.state = self.__states__.STATE_CONNECTING
-            self.handle = serial.Serial(
-                port=self.port,
-                baudrate=self.baudrate,
-                parity=self.parity,
-                timeout=self.timeout,
-                stopbits=1
-            )
-            self.state = self.__states__.STATE_CONNECTED
-        except serial.serialutil.SerialException:
-            LOGGER.exception('failed to establish serial connection, retrying in 10 seconds...')
-            time.sleep(10)
-            #self.receive(b'\x80\x05\xbf\x18\x08\x0f\x25\x80\x06\xbf\x19\x0a\x5d\x00\x77\xf0\x03\x68\x01\x9a\x68\x04\xf0\x02\x00\x9e\xd0\x07\xbf\x5b\x23\x00\x04\x00\x14\x3b\x03\x80\x01\xb9\x80\x04\xbf\x02\x00\x00\x39')
-            self.state = self.__states__.STATE_READY
-            self.listen_for_serial_connection()
-
-        # start listening for data
-        self.consume_bus()
+        while self.is_running:
+            try:
+                self.state = self.__states__.STATE_CONNECTING
+                self.handle = serial.Serial(
+                    port=self.port,
+                    baudrate=self.baudrate,
+                    parity=self.parity,
+                    timeout=self.timeout,
+                    stopbits=1
+                )
+                self.state = self.__states__.STATE_CONNECTED
+                LOGGER.info('Serial connection established.')
+                self.consume_bus()
+                break  # Exit the loop if connection is successful
+            except serial.serialutil.SerialException:
+                LOGGER.exception('Failed to establish serial connection, retrying in 10 seconds...')
+                time.sleep(10)
+            except Exception as e:
+                LOGGER.exception(f"An unexpected error occurred: {e}")
+                time.sleep(10)
 
     def consume_bus(self):
         """Starts an infinite loop on the thread that will continue to read from the bus."""
-        read_buffer_length = self.get_setting('read_buffer_length', int)
-
         try:
-            while self.handle:
-                data = self.handle.read(read_buffer_length)
-                if len(data) > 0:
+            while self.is_running and self.handle and self.handle.is_open:
+                data = self.handle.read(self.read_buffer_length)
+                if data:
                     self.receive(data)
         except Exception:
-            LOGGER.exception('exception consuming bus, retrying connection in 5 seconds...')
-            time.sleep(5)
+            LOGGER.exception('Exception consuming bus, retrying connection in 5 seconds...')
             self.reconnect()
 
     def disconnect(self):
         """Closes serial connection and resets the handle."""
+        LOGGER.info('destroying %s interface...', self.__interface_name__)
+        self.is_running = False
+        self.state = self.__states__.STATE_DISCONNECTING
+        if self.thread:
+            self.thread.join(timeout=5)
+            self.thread = None
         try:
-            LOGGER.info('destroying %s interface...', self.__interface_name__)
-            self.state = self.__states__.STATE_DISCONNECTING
-            if self.handle and hasattr(self.handle, 'close'):
+            if self.handle and self.handle.is_open:
                 self.handle.close()
         except Exception as exception:
-            LOGGER.exception('exception during %s disconnect - %r', self.__interface_name__, exception)
+            LOGGER.exception('Exception during %s disconnect - %r', self.__interface_name__, exception)
         finally:
             self.state = self.__states__.STATE_READY
             self.handle = None
-            self.thread = None
 
     def receive(self, data):
         """
@@ -104,8 +104,8 @@ class IBUSInterface(BaseInterface):
 
         Arguments
         ---------
-            data : basestring
-                the bytes retrieved from the bus, encoded as a basestring
+            data : bytes
+                the bytes retrieved from the bus
 
         """
         LOGGER.info('bus dump: hex: %r', data.hex())
@@ -123,36 +123,31 @@ class IBUSInterface(BaseInterface):
                     True if the packet bytearray is a "full/complete" IBUS packet
 
             """
-            if len(packet) == 0:  # no source id
-                return False
-            elif len(packet) == 1:  # no length
-                return False
-            elif len(packet) == 2:  # no destination id
+            if len(packet) < 3:  # At least source_id, length, destination_id
                 return False
 
-            # length = ord(packet[1])  # e.g. '\x04' -> 4
             length = packet[1]
             entire_length = length + 2  # the source_id and length bytes
-            if len(packet) == entire_length:
-                return True
-
-            return False
+            return len(packet) == entire_length
 
         # process each byte that was received
-        for index, byte in enumerate(bus_dump):  # index is an int, byte is a str
+        for byte in bus_dump:
             packet.append(byte)
 
             if is_packet_complete():
-                packet = IBUSPacket(packet)
-                if packet.is_valid():
-                    packets.append(packet)
-                else:
-                    LOGGER.error('invalid packet : %r', packet)
+                try:
+                    packet_obj = IBUSPacket(packet)
+                    if packet_obj.is_valid():
+                        packets.append(packet_obj)
+                    else:
+                        LOGGER.error('Invalid packet : %r', packet_obj)
+                except Exception as e:
+                    LOGGER.error(f"Error processing packet: {e}")
 
                 packet = bytearray()  # reset packet
 
         # invoke bound method (if set)
-        if self.receive_hook and hasattr(self.receive_hook, '__call__'):
+        if self.receive_hook and callable(self.receive_hook):
             self.receive_hook(packets)
 
     def send(self, data):
@@ -161,20 +156,26 @@ class IBUSInterface(BaseInterface):
 
         Parameters
         ----------
-            data : basestring
-                the data to be sent via this interface
+            data : str
+                the data to be sent via this interface (hex string)
 
         """
         if self.state != self.__states__.STATE_CONNECTED:
-            LOGGER.error('error: send() was called but state is not connected')
+            LOGGER.error('Error: send() was called but state is not connected')
             return False
 
-        if not self.handle or not hasattr(self.handle, 'write'):
-            LOGGER.error('cannot write to %s interface', self.__interface_name__)
+        if not self.handle or not self.handle.is_open:
+            LOGGER.error('Cannot write to %s interface', self.__interface_name__)
             self.reconnect()
-            return
+            return False
 
-        self.handle.write(bytes.fromhex(data))
+        try:
+            self.handle.write(bytes.fromhex(data))
+            return True
+        except Exception as e:
+            LOGGER.error(f"Error sending data: {e}")
+            self.reconnect()
+            return False
 
 
 class IBUSPacket(dict):
@@ -191,27 +192,31 @@ class IBUSPacket(dict):
 
     """
 
-    def __init__(self, bytes):
+    def __init__(self, bytes_data):
         """
         Initializes packet object.
 
         Parameters
         ----------
-            bytes : bytearray
+            bytes_data : bytearray
                 the bytearray representation of the ibus packet e.g. '\xFF\x03\x01\x01'
 
         """
-        super(IBUSPacket, self).__init__()
-        self['source_id'] = bytes[0]
-        self['length'] = bytes[1]
-        self['destination_id'] = bytes[2]
+        super().__init__()
+        if not isinstance(bytes_data, bytearray):
+            raise TypeError("bytes_data must be a bytearray")
+        if len(bytes_data) < 3:
+            raise ValueError("bytes_data must contain at least 3 bytes")
+        self['source_id'] = bytes_data[0]
+        self['length'] = bytes_data[1]
+        self['destination_id'] = bytes_data[2]
 
         data_start = 3
         data_end = data_start + self['length'] - 2
 
-        self['data'] = bytes[data_start:data_end]
-        self['xor_checksum'] = bytes[-1]
-        self['raw'] = bytes
+        self['data'] = bytes_data[data_start:data_end]
+        self['xor_checksum'] = bytes_data[-1]
+        self['raw'] = bytes_data
         self['timestamp'] = int(time.time())
 
     def is_valid(self):
