@@ -2,21 +2,33 @@ package com.trentseed.bmw_rpi_ibus_controller.car
 
 import androidx.core.graphics.values
 
-class CarState private constructor() {
-    val radio = RadioState()
-    val instrumentCluster = InstrumentClusterState()
-    val lightControlModule = LightControlModuleState()
-    val generalModule = GeneralModuleState()
-    val hvac = HvacState()
-    val multiFunctionSteeringWheel = MultiFunctionSteeringWheelState()
-    val cdChanger = CdChangerState()
-    val instrumentClusterExtended = InstrumentClusterExtendedState()
-    val generalModuleExtended = GeneralModuleExtendedState()
-    val pdc = PdcState()
-    val bmButton = BmButtonState()
-    val stwButton = StwButtonState()
-    val gt = GtState()
-
+class CarState private constructor(
+    val radio: RadioState,
+    val instrumentCluster: InstrumentClusterState,
+    val lightControlModule: LightControlModuleState,
+    val generalModule: GeneralModuleState,
+    val hvac: HvacState,
+    val multiFunctionSteeringWheel: MultiFunctionSteeringWheelState,
+    val cdChanger: CdChangerState,
+    val pdc: PdcState,
+    val bmButton: BmButtonState,
+    val stwButton: StwButtonState,
+    val gt: GtState
+) {
+    // Primary constructor for initial creation
+    private constructor() : this(
+        RadioState(),
+        InstrumentClusterState(),
+        LightControlModuleState(),
+        GeneralModuleState(),
+        HvacState(),
+        MultiFunctionSteeringWheelState(),
+        CdChangerState(),
+        PdcState(),
+        BmButtonState(),
+        StwButtonState(),
+        GtState()
+    )
     companion object {
         @Volatile
         private var instance: CarState? = null
@@ -26,6 +38,22 @@ class CarState private constructor() {
                 instance ?: CarState().also { instance = it }
             }
         }
+    }
+
+    fun copy(): CarState {
+        return CarState(
+            radio.copy(),
+            instrumentCluster.copy(),
+            lightControlModule.copy(),
+            generalModule.copy(),
+            hvac.copy(),
+            multiFunctionSteeringWheel.copy(),
+            cdChanger.copy(),
+            pdc.copy(),
+            bmButton.copy(),
+            stwButton.copy(),
+            gt.copy()
+        )
     }
 
     fun getCarState(): String {
@@ -99,18 +127,6 @@ class CarState private constructor() {
         sb.appendLine("  isRandom: ${cdChanger.isRandom}")
         sb.appendLine("  currentDisc: ${cdChanger.currentDisc}")
         sb.appendLine("  currentTrack: ${cdChanger.currentTrack}")
-
-        sb.appendLine("Instrument Cluster Extended State:")
-        sb.appendLine("  coolantTemp: ${instrumentClusterExtended.coolantTemp}")
-        sb.appendLine("  speed: ${instrumentClusterExtended.speed}")
-        sb.appendLine("  rpm: ${instrumentClusterExtended.rpm}")
-        sb.appendLine("  vin: ${instrumentClusterExtended.vin}")
-        sb.appendLine("  countryCoding: ${instrumentClusterExtended.countryCoding}")
-        sb.appendLine("  odometer: ${instrumentClusterExtended.odometer}")
-        sb.appendLine("  ignitionState: ${instrumentClusterExtended.ignitionState}")
-
-        sb.appendLine("General Module Extended State:")
-        sb.appendLine("  state: ${generalModuleExtended.state}")
 
         sb.appendLine("PDC State:")
         sb.appendLine("  isTurnedOn: ${pdc.isTurnedOn}")
@@ -203,17 +219,20 @@ data class CdChangerState(
     var isRandom: Boolean = false,
     var currentDisc: Int = 0,
     var currentTrack: Int = 0
-)
-
-data class InstrumentClusterExtendedState(
-    var coolantTemp: Int = 0,
-    var speed: Int = 0,
-    var rpm: Int = 0,
-    var vin: String = "",
-    var countryCoding: String = "",
-    var odometer: Int = 0,
-    var ignitionState: IgnitionState = IgnitionState.UNKNOWN
-)
+) {
+    fun copy(): CdChangerState {
+        return CdChangerState(
+            isAlive,
+            isPlaying,
+            isPaused,
+            isStopped,
+            isScanning,
+            isRandom,
+            currentDisc,
+            currentTrack
+        )
+    }
+}
 
 enum class IgnitionState {
     UNKNOWN,
@@ -223,14 +242,17 @@ enum class IgnitionState {
     START
 }
 
-data class GeneralModuleExtendedState(
-    var state: String = ""
-)
-
 data class PdcState(
     var isTurnedOn: Boolean = false,
     var values: List<Int> = emptyList()
-)
+) {
+    fun copy(): PdcState {
+        return PdcState(
+            isTurnedOn,
+            values.toList()
+        )
+    }
+}
 
 data class BmButtonState(
     var nextHold: Boolean = false,
@@ -282,7 +304,61 @@ data class BmButtonState(
     var button5Rel: Boolean = false,
     var button6Hold: Boolean = false,
     var button6Rel: Boolean = false,
-)
+) {
+    fun copy(): BmButtonState {
+        return BmButtonState(
+            nextHold,
+            nextRel,
+            prevHold,
+            prevRel,
+            reverseHold,
+            reverseRel,
+            dolbyPres,
+            dolbyHold,
+            dolbyRel,
+            rdsPres,
+            rdsHold,
+            rdsRel,
+            ejectPres,
+            ejectHold,
+            ejectRel,
+            tonePres,
+            toneHold,
+            toneRel,
+            selectPres,
+            selectHold,
+            selectRel,
+            volRight,
+            volLeft,
+            volRel,
+            volHold,
+            modePres,
+            modeHold,
+            modeRel,
+            fmPres,
+            fmHold,
+            fmRel,
+            amPres,
+            amHold,
+            amRel,
+            screenPres,
+            screenHold,
+            screenRel,
+            button1Hold,
+            button1Rel,
+            button2Hold,
+            button2Rel,
+            button3Hold,
+            button3Rel,
+            button4Hold,
+            button4Rel,
+            button5Hold,
+            button5Rel,
+            button6Hold,
+            button6Rel
+        )
+    }
+}
 
 data class StwButtonState(
     var volUp: Boolean = false,
@@ -300,13 +376,41 @@ data class StwButtonState(
     var speakPres: Boolean = false,
     var speakHold: Boolean = false,
     var speakRel: Boolean = false
-)
+) {
+    fun copy(): StwButtonState {
+        return StwButtonState(
+            volUp,
+            volDown,
+            upPres,
+            upHold,
+            upRel,
+            downPres,
+            downHold,
+            downRel,
+            rtHold,
+            rtRel,
+            rtOn,
+            rtOff,
+            speakPres,
+            speakHold,
+            speakRel
+        )
+    }
+}
 
 data class GtState(
     var isTvOn: Boolean = false,
     var mode: GtMode = GtMode.NONE,
     val modebm23: Boolean = false
-)
+) {
+    fun copy(): GtState {
+        return GtState(
+            isTvOn,
+            mode,
+            modebm23
+        )
+    }
+}
 
 enum class GtMode {
     NONE,

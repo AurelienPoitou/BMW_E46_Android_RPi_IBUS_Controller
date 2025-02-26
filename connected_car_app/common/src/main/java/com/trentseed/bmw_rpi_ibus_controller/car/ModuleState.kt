@@ -9,7 +9,20 @@ data class RadioState(
     var mute: Boolean = false,
     var cdChangerTrack: Int = 0,
     var cdChangerDisc: Int = 0
-)
+) {
+    fun copy(): RadioState {
+        return RadioState(
+            power,
+            band,
+            frequency,
+            volume,
+            stationName,
+            mute,
+            cdChangerTrack,
+            cdChangerDisc
+        )
+    }
+}
 
 data class InstrumentClusterState(
     var speed: Int = 0,
@@ -19,10 +32,36 @@ data class InstrumentClusterState(
     var outsideTemp: Int = 0,
     var odometer: Int = 0,
     var tripOdometer: Int = 0,
-    var serviceInterval: Int = 0,
     var gear: Int = 0,
+    var vin: String = "",
+    var countryCoding: String = "",
+    var ignitionState: IgnitionState = IgnitionState.UNKNOWN,
+    var serviceInterval: Int = 0,
+    var serviceIntervalType: Int = 0,
+    var serviceIntervalDays: Int = 0,
     var checkControlMessages: List<String> = emptyList()
-)
+) {
+
+    fun copy(): InstrumentClusterState {
+        return InstrumentClusterState(
+            speed,
+            rpm,
+            fuelLevel,
+            coolantTemp,
+            outsideTemp,
+            odometer,
+            tripOdometer,
+            gear,
+            vin,
+            countryCoding,
+            ignitionState,
+            serviceInterval,
+            serviceIntervalDays,
+            serviceIntervalType,
+            checkControlMessages
+        )
+    }
+}
 
 data class LightControlModuleState(
     var headlights: LightStatus = LightStatus.OFF,
@@ -32,7 +71,19 @@ data class LightControlModuleState(
     var hazardLights: Boolean = false,
     var interiorLights: Boolean = false,
     var brakeLights: Boolean = false
-)
+) {
+    fun copy(): LightControlModuleState {
+        return LightControlModuleState(
+            headlights,
+            fogLights,
+            turnSignalLeft,
+            turnSignalRight,
+            hazardLights,
+            interiorLights,
+            brakeLights
+        )
+    }
+}
 
 data class GeneralModuleState(
     var doorDriver: DoorStatus = DoorStatus.CLOSED,
@@ -47,7 +98,24 @@ data class GeneralModuleState(
     var windowRearRight: WindowStatus = WindowStatus.CLOSED,
     var lockStatus: LockStatus = LockStatus.LOCKED,
     var sunroof: WindowStatus = WindowStatus.CLOSED
-)
+) {
+    fun copy(): GeneralModuleState {
+        return GeneralModuleState(
+            doorDriver,
+            doorPassenger,
+            doorRearLeft,
+            doorRearRight,
+            trunk,
+            hood,
+            windowDriver,
+            windowPassenger,
+            windowRearLeft,
+            windowRearRight,
+            lockStatus,
+            sunroof
+        )
+    }
+}
 
 data class HvacState(
     var mode: HvacMode = HvacMode.OFF,
@@ -58,8 +126,27 @@ data class HvacState(
     var ac: Boolean = false,
     var recirculate: Boolean = false,
     var defrost: Boolean = false
-)
+) {
+    fun copy(): HvacState {
+        return HvacState(
+            mode,
+            fanSpeed,
+            temperatureDriver,
+            temperaturePassenger,
+            airDistribution,
+            ac,
+            recirculate,
+            defrost
+        )
+    }
+}
 
 data class MultiFunctionSteeringWheelState(
     var buttonPressed: SteeringWheelButton = SteeringWheelButton.NONE
-)
+) {
+    fun copy(): MultiFunctionSteeringWheelState {
+        return MultiFunctionSteeringWheelState(
+            buttonPressed
+        )
+    }
+}
