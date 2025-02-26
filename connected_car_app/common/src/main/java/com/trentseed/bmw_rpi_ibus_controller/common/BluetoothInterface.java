@@ -1,15 +1,9 @@
 package com.trentseed.bmw_rpi_ibus_controller.common;
 
-import android.Manifest;
-import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.util.Log;
-
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
 import java.util.Set;
 import java.util.UUID;
@@ -21,7 +15,7 @@ public class BluetoothInterface {
     private Context mContext;
     private BluetoothConnectionManager.ConnectionListener mListener;
     public interface IBUSPacketListener {
-        void onIBUSPacketReceived(String data);
+        void onIBUSPacketReceived(IBUSPacket[] ibusPackets);
     }
     public static IBUSPacketListener mIBUSPacketListener;
     private static final UUID SERVICE_UUID = UUID.fromString("94f39d29-7d6d-437d-973b-fba39e49d4ee");
@@ -64,7 +58,7 @@ public class BluetoothInterface {
             return;
         }
 
-        if (mBluetoothConnectionManager != null && (mBluetoothConnectionManager.isConnected() || mBluetoothConnectionManager.isConnecting())) {
+        if (mBluetoothConnectionManager != null && (mBluetoothConnectionManager.isConnected() || mBluetoothConnectionManager.isConnecting().get())) {
             Log.d("BMW", "Already connected, skipping connection attempt.");
             return;
         }
@@ -96,9 +90,9 @@ public class BluetoothInterface {
 
                     @Override
                     public void onDataReceived(String data) {
-                        BluetoothDataHolder.INSTANCE.updateData(data);
+                        IBUSPacket[] iBusPackets = BluetoothDataHolder.INSTANCE.updateData(data);
                         if (mIBUSPacketListener != null) {
-                            mIBUSPacketListener.onIBUSPacketReceived(data);
+                            mIBUSPacketListener.onIBUSPacketReceived(iBusPackets);
                         }
                     }
 

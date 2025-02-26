@@ -25,6 +25,18 @@ public class IBUSPacket {
         return getDeviceName(raw.get(2));
     }
 
+    public int getSourceId() {
+        return this.raw.get(0);
+    }
+
+    public int getDestinationId() {
+        return raw.get(2);
+    }
+
+    public List<Integer> getData() {
+        return raw.subList(3, raw.size() - 1);
+    }
+
     private String getDeviceName(int device_id){
         switch (device_id) {
             case 0:

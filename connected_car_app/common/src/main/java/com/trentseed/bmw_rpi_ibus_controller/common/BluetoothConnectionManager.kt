@@ -21,6 +21,9 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 class BluetoothConnectionManager(
     private val context: Context,
@@ -44,12 +47,13 @@ class BluetoothConnectionManager(
     private var heartbeatJob: Job? = null
     private val connectionScope = CoroutineScope(Dispatchers.IO)
     public var isConnected = false
-    public var isConnecting = false
+    public val isConnecting = AtomicBoolean(false)
     private val HEARTBEAT_TIMEOUT = 10000L // 10 seconds
     private val RECONNECT_DELAY_BASE = 5000L // 5 seconds
     private val MAX_RECONNECT_ATTEMPTS = 5
     private var reconnectAttempts = 0
     private var lastHeartbeatReceived = System.currentTimeMillis()
+    private val socketLock = ReentrantLock()
 
     private val BLUETOOTH_PERMISSIONS = arrayOf(
         Manifest.permission.BLUETOOTH,
@@ -64,8 +68,8 @@ class BluetoothConnectionManager(
             listener.onPermissionsDenied()
             return
         }
-        if (isConnecting || isConnected) return
-        isConnecting = true
+        if (isConnecting.get() || isConnected) return
+        isConnecting.set(true)
         listener.onConnecting()
         connectionScope.launch {
             connectInternal()
@@ -74,21 +78,23 @@ class BluetoothConnectionManager(
 
     private suspend fun connectInternal() {
         try {
-            bluetoothSocket = if (ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.BLUETOOTH_CONNECT
-                ) == PackageManager.PERMISSION_GRANTED
-            ) {
-                device.createInsecureRfcommSocketToServiceRecord(serviceUUID)
-            } else {
-                null
+            socketLock.withLock {
+                bluetoothSocket = if (ContextCompat.checkSelfPermission(
+                        context,
+                        Manifest.permission.BLUETOOTH_CONNECT
+                    ) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    device.createInsecureRfcommSocketToServiceRecord(serviceUUID)
+                } else {
+                    null
+                }
+                bluetoothSocket?.connect()
+                inputStream = bluetoothSocket?.inputStream
+                outputStream = bluetoothSocket?.outputStream
+                isConnected = true
+                isConnecting.set(false)
+                reconnectAttempts = 0
             }
-            bluetoothSocket?.connect()
-            inputStream = bluetoothSocket?.inputStream
-            outputStream = bluetoothSocket?.outputStream
-            isConnected = true
-            isConnecting = false
-            reconnectAttempts = 0
             withContext(Dispatchers.Main) {
                 listener.onConnected()
                 showToast("Connected to ${device.name}")
@@ -102,6 +108,13 @@ class BluetoothConnectionManager(
             Log.e("BluetoothConnectionManager", "Connection failed", e)
             disconnect()
             reconnect()
+        } finally {
+            socketLock.withLock {
+                if (!isConnected) {
+                    bluetoothSocket?.close()
+                    bluetoothSocket = null
+                }
+            }
         }
     }
 
@@ -166,6 +179,10 @@ class BluetoothConnectionManager(
     }
 
     private fun reconnect() {
+        if (isConnecting.get() || isConnected) {
+            Log.e("BluetoothConnectionManager", "reconnect: isConnecting or isConnected")
+            return
+        }
         if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
             reconnectAttempts++
             val delayMillis = RECONNECT_DELAY_BASE * reconnectAttempts
@@ -205,22 +222,30 @@ class BluetoothConnectionManager(
     }
 
     private suspend fun disconnectInternal() {
-        if (!isConnected && !isConnecting) return
-        isConnected = false
-        isConnecting = false
-        readThread?.cancel()
-        heartbeatJob?.cancel()
+        var disconnected = false
         try {
-            bluetoothSocket?.close()
+            socketLock.withLock {
+                if (!isConnected && !isConnecting.get()) return
+                isConnected = false
+                isConnecting.set(false)
+                readThread?.cancel()
+                heartbeatJob?.cancel()
+                bluetoothSocket?.close()
+                disconnected = true
+            }
         } catch (e: IOException) {
             Log.e("BluetoothConnectionManager", "Error closing socket", e)
         } finally {
-            bluetoothSocket = null
-            inputStream = null
-            outputStream = null
-            withContext(Dispatchers.Main) {
-                listener.onDisconnected()
-                showToast("Disconnected")
+            socketLock.withLock {
+                bluetoothSocket = null
+                inputStream = null
+                outputStream = null
+            }
+            if (disconnected) {
+                withContext(Dispatchers.Main) {
+                    listener.onDisconnected()
+                    showToast("Disconnected")
+                }
             }
         }
     }

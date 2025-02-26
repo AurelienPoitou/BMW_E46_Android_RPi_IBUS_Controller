@@ -103,7 +103,6 @@ class BluetoothInterface(BaseInterface):
         """
         LOGGER.info('destroying bluetooth interface...')
         self.state = self.__states__.STATE_DISCONNECTING
-        self.is_running = False
         self.stop_heartbeat()
         try:
             if self.client_sock:

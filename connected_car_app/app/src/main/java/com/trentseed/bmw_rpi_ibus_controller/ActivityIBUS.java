@@ -19,6 +19,7 @@ import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothInterface;
 import com.trentseed.bmw_rpi_ibus_controller.common.IBUSPacket;
 import com.trentseed.bmw_rpi_ibus_controller.common.LogConfig;
 
+import java.util.List;
 import java.util.logging.Logger;
 
 public class ActivityIBUS extends AppCompatActivity implements BluetoothInterface.IBUSPacketListener, AdapterIBUS.OnItemClickListener {
@@ -93,10 +94,9 @@ public class ActivityIBUS extends AppCompatActivity implements BluetoothInterfac
 	}
 
 	@Override
-	public void onIBUSPacketReceived(String data) {
+	public void onIBUSPacketReceived(IBUSPacket[] ibusPackets) {
 		runOnUiThread(() -> {
-			adapterIBUS.clearPackets();
-			adapterIBUS.addPackets(BluetoothDataHolder.INSTANCE.getReceivedPackets());
+			adapterIBUS.addPackets(List.of(ibusPackets));
 			flashActivity();
 			if (adapterIBUS.getItemCount() == 0) {
 				tvNoActivity.setVisibility(View.VISIBLE); // Initially show the indicator
