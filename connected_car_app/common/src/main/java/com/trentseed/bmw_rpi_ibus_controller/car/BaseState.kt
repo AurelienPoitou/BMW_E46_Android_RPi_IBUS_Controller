@@ -1,12 +1,5 @@
 package com.trentseed.bmw_rpi_ibus_controller.car
 
-enum class LightStatus {
-    OFF,
-    PARKING,
-    LOW_BEAM,
-    HIGH_BEAM
-}
-
 enum class DoorStatus {
     OPEN,
     CLOSED

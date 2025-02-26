@@ -3,7 +3,6 @@ package com.trentseed.bmw_rpi_ibus_controller.common
 import android.util.Log
 import com.google.gson.Gson
 import com.trentseed.bmw_rpi_ibus_controller.car.IBUSPacketParser
-import java.util.List
 import java.util.logging.Logger
 
 object BluetoothDataHolder {

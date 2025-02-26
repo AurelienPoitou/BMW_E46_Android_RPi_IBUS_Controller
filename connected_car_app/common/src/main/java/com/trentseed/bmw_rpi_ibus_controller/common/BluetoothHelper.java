@@ -13,7 +13,7 @@ import androidx.core.content.ContextCompat;
 public class BluetoothHelper {
 
     private static final int REQUEST_BLUETOOTH_PERMISSIONS = 1;
-    private Context mContext;
+    private final Context mContext;
 
     public BluetoothHelper(Context context) {
         mContext = context;

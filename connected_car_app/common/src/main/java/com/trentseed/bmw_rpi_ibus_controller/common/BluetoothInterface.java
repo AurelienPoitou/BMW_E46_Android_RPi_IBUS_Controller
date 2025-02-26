@@ -2,8 +2,11 @@ package com.trentseed.bmw_rpi_ibus_controller.common;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
 import android.content.Context;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
 
 import java.util.Set;
 import java.util.UUID;
@@ -12,8 +15,8 @@ public class BluetoothInterface {
 
     private static BluetoothInterface instance;
     private BluetoothConnectionManager mBluetoothConnectionManager;
-    private Context mContext;
-    private BluetoothConnectionManager.ConnectionListener mListener;
+    private final Context mContext;
+    private final BluetoothConnectionManager.ConnectionListener mListener;
     public interface IBUSPacketListener {
         void onIBUSPacketReceived(IBUSPacket[] ibusPackets);
     }
@@ -41,16 +44,6 @@ public class BluetoothInterface {
     }
 
     public void connectToRaspberryPi() {
-        BluetoothAdapter bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (bluetoothAdapter == null) {
-            Log.e("BMW", "Bluetooth not supported on this device.");
-            return;
-        }
-        if (!bluetoothAdapter.isEnabled()) {
-            Log.e("BMW", "Bluetooth is not enabled.");
-            return;
-        }
-
         // Check for permissions before accessing bonded devices
         if (!hasBluetoothPermissions()) {
             Log.e("BMW", "Bluetooth permissions not granted.");
@@ -64,6 +57,7 @@ public class BluetoothInterface {
         }
 
         try {
+            BluetoothAdapter bluetoothAdapter = mContext.getSystemService(BluetoothManager.class).getAdapter();
             Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
             BluetoothDevice raspberryPiDevice = null;
             for (BluetoothDevice device : pairedDevices) {
@@ -89,9 +83,9 @@ public class BluetoothInterface {
                     }
 
                     @Override
-                    public void onDataReceived(String data) {
+                    public void onDataReceived(@NonNull String data) {
                         IBUSPacket[] iBusPackets = BluetoothDataHolder.INSTANCE.updateData(data);
-                        if (mIBUSPacketListener != null) {
+                        if (iBusPackets.length > 0) {
                             mIBUSPacketListener.onIBUSPacketReceived(iBusPackets);
                         }
                     }
@@ -124,15 +118,19 @@ public class BluetoothInterface {
         return mBluetoothConnectionManager != null && mBluetoothConnectionManager.isConnected();
     }
 
+    public boolean isConnecting() {
+        return mBluetoothConnectionManager != null && mBluetoothConnectionManager.isConnecting().get();
+    }
+
     public void disconnect() {
         if (mBluetoothConnectionManager != null) {
             mBluetoothConnectionManager.disconnect();
         }
     }
 
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, int[] grantResults) {
         if (mBluetoothConnectionManager != null) {
-            mBluetoothConnectionManager.onRequestPermissionsResult(requestCode, permissions, grantResults);
+            mBluetoothConnectionManager.onRequestPermissionsResult(requestCode, grantResults);
         }
     }
 

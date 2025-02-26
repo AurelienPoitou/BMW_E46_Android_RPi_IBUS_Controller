@@ -17,14 +17,6 @@ public class IBUSPacket {
 
     public IBUSPacket(){ }
 
-    public String getSourceName(){
-        return getDeviceName(this.raw.get(0));
-    }
-
-    public String getDestinationName(){
-        return getDeviceName(raw.get(2));
-    }
-
     public int getSourceId() {
         return this.raw.get(0);
     }
@@ -98,6 +90,19 @@ public class IBUSPacket {
         return normalized.replace(" CAP", " CA");  // extra data to remove
     }
 
+    public static String convertASCIIHexToString(List<Integer> hex) {
+
+        StringBuilder result = new StringBuilder();
+
+        // split into two chars per loop, hex, 0A, 0B, 0C...
+        for (int i = 0; i < hex.size(); i += 1) {
+            // convert the decimal to char
+            result.append((char) hex.get(i).intValue());
+        }
+
+        return result.toString();
+    }
+
     public String getHexFromRaw(){
         return toPaddedHexString(raw);
     }
@@ -109,7 +114,6 @@ public class IBUSPacket {
     }
 
     private static String toPaddedHex(int number) {
-        String hex = Integer.toHexString(number).toUpperCase();
         return String.format("%02X", number);
     }
 

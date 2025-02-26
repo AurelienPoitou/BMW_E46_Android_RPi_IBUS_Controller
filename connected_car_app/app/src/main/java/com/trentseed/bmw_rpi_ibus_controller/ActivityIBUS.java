@@ -1,7 +1,6 @@
 package com.trentseed.bmw_rpi_ibus_controller;
 
 import android.app.AlertDialog;
-import android.content.DialogInterface;
 import android.os.Bundle;
 import android.view.View;
 import android.view.animation.AccelerateInterpolator;
@@ -10,6 +9,7 @@ import android.view.animation.Animation;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -59,12 +59,7 @@ public class ActivityIBUS extends AppCompatActivity implements BluetoothInterfac
 		}
 
 		// set click handlers
-		ivBack.setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View v) {
-				finish();
-			}
-		});
+		ivBack.setOnClickListener(v -> finish());
 	}
 
 	@Override
@@ -88,9 +83,9 @@ public class ActivityIBUS extends AppCompatActivity implements BluetoothInterfac
 	}
 
 	@Override
-	public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+	public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
 		super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-		mBluetoothInterface.onRequestPermissionsResult(requestCode, permissions, grantResults);
+		mBluetoothInterface.onRequestPermissionsResult(requestCode, grantResults);
 	}
 
 	@Override
@@ -116,35 +111,31 @@ public class ActivityIBUS extends AppCompatActivity implements BluetoothInterfac
 		fadeIn.setInterpolator(new AccelerateInterpolator());
 		fadeIn.setDuration(300);
 		fadeIn.setAnimationListener(new Animation.AnimationListener() {
+			@Override
+			public void onAnimationStart(Animation animation) {}
+
+			@Override
+			public void onAnimationRepeat(Animation animation) {}
+
+			@Override
 			public void onAnimationEnd(Animation animation) {
 				// fade out animation
 				Animation fadeOut = new AlphaAnimation(1, 0);
 				fadeOut.setInterpolator(new AccelerateInterpolator());
 				fadeOut.setDuration(300);
 				fadeOut.setAnimationListener(new Animation.AnimationListener() {
-					public void onAnimationStart(Animation animation) {
-					}
+					@Override
+					public void onAnimationStart(Animation animation) {}
 
-					public void onAnimationRepeat(Animation animation) {
-					}
+					@Override
+					public void onAnimationRepeat(Animation animation) {}
 
+					@Override
 					public void onAnimationEnd(Animation animation) {
 						ivBusActivity.setVisibility(View.GONE);
 					}
-
-					public void onAnimationCancel(Animation animation) {
-					}
 				});
 				ivBusActivity.startAnimation(fadeOut);
-			}
-
-			public void onAnimationRepeat(Animation animation) {
-			}
-
-			public void onAnimationStart(Animation animation) {
-			}
-
-			public void onAnimationCancel(Animation animation) {
 			}
 		});
 		ivBusActivity.startAnimation(fadeIn);
@@ -156,11 +147,8 @@ public class ActivityIBUS extends AppCompatActivity implements BluetoothInterfac
 		AlertDialog.Builder msgBuilder = new AlertDialog.Builder(ActivityIBUS.this);
 		msgBuilder.setTitle("IBUS Packet");
 		msgBuilder.setMessage("Data: " + packet.raw + "\nASCII: " + packet.getAsciiFromRaw());
-		msgBuilder.setPositiveButton("Done", new DialogInterface.OnClickListener() {
-			@Override
-			public void onClick(DialogInterface dialog, int which) {
-			}
-		});
+		msgBuilder.setPositiveButton("Done", (dialog, which) -> {
+        });
 		msgBuilder.create().show();
 	}
 }

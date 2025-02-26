@@ -2,7 +2,6 @@ package com.trentseed.bmw_rpi_ibus_controller;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ImageView;
@@ -41,12 +40,7 @@ public class ActivityDevices extends Activity {
         rvDevices.setAdapter(adapterDevices);
 
 		// set click handlers
-		ivBack.setOnClickListener(new View.OnClickListener() {
-			@Override
-			public void onClick(View v) {
-				finish();
-			}
-		});
+        ivBack.setOnClickListener(v -> finish());
 	}
 	
 	@Override
@@ -80,18 +74,8 @@ public class ActivityDevices extends Activity {
 	    device.icon = R.drawable.icon_lock;
 	    device.imageAction1 = R.drawable.unlock;
         device.imageAction2 = R.drawable.lock;
-        device.onClickListenerAction1 = new View.OnClickListener(){
-            @Override
-            public void onClick(View v) {
-                IBUSWrapper.unlockCar();
-            }
-        };
-        device.onClickListenerAction2 = new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                IBUSWrapper.lockCar();
-            }
-        };
+        device.onClickListenerAction1 = v -> IBUSWrapper.unlockCar();
+        device.onClickListenerAction2 = view -> IBUSWrapper.lockCar();
 	    return device;
     }
 
@@ -101,18 +85,8 @@ public class ActivityDevices extends Activity {
         device.icon = R.drawable.icon_volume;
         device.imageAction1 = R.drawable.arrow_left;
         device.imageAction2 = R.drawable.arrow_down;
-        device.onClickListenerAction1 = new View.OnClickListener(){
-            @Override
-            public void onClick(View v) {
-                IBUSWrapper.nextTrack(ActivityDevices.this);
-            }
-        };
-        device.onClickListenerAction2 = new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                IBUSWrapper.nextTrack(ActivityDevices.this);
-            }
-        };
+        device.onClickListenerAction1 = v -> IBUSWrapper.nextTrack(ActivityDevices.this);
+        device.onClickListenerAction2 = view -> IBUSWrapper.nextTrack(ActivityDevices.this);
         return device;
     }
 
@@ -122,18 +96,8 @@ public class ActivityDevices extends Activity {
         device.icon = R.drawable.icon_lights;
         device.imageAction1 = R.drawable.btn_on;
         device.imageAction2 = R.drawable.btn_off;
-        device.onClickListenerAction1 = new View.OnClickListener(){
-            @Override
-            public void onClick(View v) {
-                IBUSWrapper.turnInteriorLightsOn();
-            }
-        };
-        device.onClickListenerAction2 = new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                IBUSWrapper.turnInteriorLightsOff();
-            }
-        };
+        device.onClickListenerAction1 = v -> IBUSWrapper.turnInteriorLightsOn();
+        device.onClickListenerAction2 = view -> IBUSWrapper.turnInteriorLightsOff();
         return device;
     }
 
@@ -143,18 +107,8 @@ public class ActivityDevices extends Activity {
         device.icon = R.drawable.icon_volume;
         device.imageAction1 = R.drawable.arrow_up;
         device.imageAction2 = R.drawable.arrow_down;
-        device.onClickListenerAction1 = new View.OnClickListener(){
-            @Override
-            public void onClick(View v) {
-                IBUSWrapper.volumeUp();
-            }
-        };
-        device.onClickListenerAction2 = new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                IBUSWrapper.volumeDown();
-            }
-        };
+        device.onClickListenerAction1 = v -> IBUSWrapper.volumeUp();
+        device.onClickListenerAction2 = view -> IBUSWrapper.volumeDown();
         return device;
     }
 
@@ -164,18 +118,8 @@ public class ActivityDevices extends Activity {
         device.icon = R.drawable.icon_window_left;
         device.imageAction1 = R.drawable.arrow_up;
         device.imageAction2 = R.drawable.arrow_down;
-        device.onClickListenerAction1 = new View.OnClickListener(){
-            @Override
-            public void onClick(View v) {
-                IBUSWrapper.windowDriverFront(false);
-            }
-        };
-        device.onClickListenerAction2 = new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                IBUSWrapper.windowDriverFront(true);
-            }
-        };
+        device.onClickListenerAction1 = v -> IBUSWrapper.windowDriverFront(false);
+        device.onClickListenerAction2 = view -> IBUSWrapper.windowDriverFront(true);
         return device;
     }
 
@@ -185,18 +129,8 @@ public class ActivityDevices extends Activity {
         device.icon = R.drawable.icon_window_right;
         device.imageAction1 = R.drawable.arrow_up;
         device.imageAction2 = R.drawable.arrow_down;
-        device.onClickListenerAction1 = new View.OnClickListener(){
-            @Override
-            public void onClick(View v) {
-                IBUSWrapper.windowPassengerFront(false);
-            }
-        };
-        device.onClickListenerAction2 = new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                IBUSWrapper.windowPassengerFront(true);
-            }
-        };
+        device.onClickListenerAction1 = v -> IBUSWrapper.windowPassengerFront(false);
+        device.onClickListenerAction2 = view -> IBUSWrapper.windowPassengerFront(true);
         return device;
     }
 
@@ -206,18 +140,8 @@ public class ActivityDevices extends Activity {
         device.icon = R.drawable.icon_window_left;
         device.imageAction1 = R.drawable.arrow_up;
         device.imageAction2 = R.drawable.arrow_down;
-        device.onClickListenerAction1 = new View.OnClickListener(){
-            @Override
-            public void onClick(View v) {
-                IBUSWrapper.windowDriverRear(false);
-            }
-        };
-        device.onClickListenerAction2 = new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                IBUSWrapper.windowDriverRear(true);
-            }
-        };
+        device.onClickListenerAction1 = v -> IBUSWrapper.windowDriverRear(false);
+        device.onClickListenerAction2 = view -> IBUSWrapper.windowDriverRear(true);
         return device;
     }
 
@@ -227,18 +151,8 @@ public class ActivityDevices extends Activity {
         device.icon = R.drawable.icon_window_right;
         device.imageAction1 = R.drawable.arrow_up;
         device.imageAction2 = R.drawable.arrow_down;
-        device.onClickListenerAction1 = new View.OnClickListener(){
-            @Override
-            public void onClick(View v) {
-                IBUSWrapper.windowPassengerRear(false);
-            }
-        };
-        device.onClickListenerAction2 = new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                IBUSWrapper.windowPassengerRear(true);
-            }
-        };
+        device.onClickListenerAction1 = v -> IBUSWrapper.windowPassengerRear(false);
+        device.onClickListenerAction2 = view -> IBUSWrapper.windowPassengerRear(true);
         return device;
     }
 
@@ -248,18 +162,8 @@ public class ActivityDevices extends Activity {
         device.icon = R.drawable.icon_driverseat;
         device.imageAction1 = R.drawable.arrow_up;
         device.imageAction2 = R.drawable.arrow_down;
-        device.onClickListenerAction1 = new View.OnClickListener(){
-            @Override
-            public void onClick(View v) {
-                IBUSWrapper.moveDriverSeat(false);
-            }
-        };
-        device.onClickListenerAction2 = new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                IBUSWrapper.moveDriverSeat(true);
-            }
-        };
+        device.onClickListenerAction1 = v -> IBUSWrapper.moveDriverSeat(false);
+        device.onClickListenerAction2 = view -> IBUSWrapper.moveDriverSeat(true);
         return device;
     }
 
@@ -269,18 +173,8 @@ public class ActivityDevices extends Activity {
         device.icon = R.drawable.icon_sunroof;
         device.imageAction1 = R.drawable.arrow_up;
         device.imageAction2 = R.drawable.arrow_down;
-        device.onClickListenerAction1 = new View.OnClickListener(){
-            @Override
-            public void onClick(View v) {
-                IBUSWrapper.toggleSunroof(false);
-            }
-        };
-        device.onClickListenerAction2 = new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                IBUSWrapper.toggleSunroof(true);
-            }
-        };
+        device.onClickListenerAction1 = v -> IBUSWrapper.toggleSunroof(false);
+        device.onClickListenerAction2 = view -> IBUSWrapper.toggleSunroof(true);
         return device;
     }
 	

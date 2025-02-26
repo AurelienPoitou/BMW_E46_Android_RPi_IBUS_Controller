@@ -46,8 +46,8 @@ class BluetoothConnectionManager(
     private var readThread: Job? = null
     private var heartbeatJob: Job? = null
     private val connectionScope = CoroutineScope(Dispatchers.IO)
-    public var isConnected = false
-    public val isConnecting = AtomicBoolean(false)
+    var isConnected = false
+    val isConnecting = AtomicBoolean(false)
     private val HEARTBEAT_TIMEOUT = 10000L // 10 seconds
     private val RECONNECT_DELAY_BASE = 5000L // 5 seconds
     private val MAX_RECONNECT_ATTEMPTS = 5
@@ -92,7 +92,6 @@ class BluetoothConnectionManager(
                 inputStream = bluetoothSocket?.inputStream
                 outputStream = bluetoothSocket?.outputStream
                 isConnected = true
-                isConnecting.set(false)
                 reconnectAttempts = 0
             }
             withContext(Dispatchers.Main) {
@@ -102,6 +101,13 @@ class BluetoothConnectionManager(
             startReading()
             startHeartbeatMonitoring()
         } catch (e: IOException) {
+            socketLock.withLock {
+                isConnecting.set(false)
+                if (!isConnected) {
+                    bluetoothSocket?.close()
+                    bluetoothSocket = null
+                }
+            }
             withContext(Dispatchers.Main) {
                 showToast("Connection failed: ${e.message}")
             }
@@ -275,7 +281,6 @@ class BluetoothConnectionManager(
 
     fun onRequestPermissionsResult(
         requestCode: Int,
-        permissions: Array<out String>,
         grantResults: IntArray
     ) {
         if (requestCode == REQUEST_BLUETOOTH_PERMISSIONS) {

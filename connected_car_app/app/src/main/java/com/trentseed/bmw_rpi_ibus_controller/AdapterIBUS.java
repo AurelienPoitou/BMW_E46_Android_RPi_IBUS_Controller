@@ -15,8 +15,8 @@ import java.util.List;
 
 public class AdapterIBUS extends RecyclerView.Adapter<AdapterIBUS.IBUSViewHolder> {
 
-	private List<IBUSPacket> mIBUSPackets;
-	private OnItemClickListener mListener;
+	private final List<IBUSPacket> mIBUSPackets;
+	private final OnItemClickListener mListener;
 
 	public interface OnItemClickListener {
 		void onItemClick(IBUSPacket packet);
@@ -28,13 +28,9 @@ public class AdapterIBUS extends RecyclerView.Adapter<AdapterIBUS.IBUSViewHolder
 	}
 
 	public void addPackets(List<IBUSPacket> packets) {
+		int initialSize = mIBUSPackets.size();
 		mIBUSPackets.addAll(packets);
-		notifyDataSetChanged(); // Notify the RecyclerView of the change
-	}
-
-	public void clearPackets() {
-		mIBUSPackets.clear();
-		notifyDataSetChanged(); // Notify the RecyclerView of the change
+		notifyItemRangeInserted(initialSize, packets.size()); // Notify the RecyclerView of the change
 	}
 
 	@NonNull
