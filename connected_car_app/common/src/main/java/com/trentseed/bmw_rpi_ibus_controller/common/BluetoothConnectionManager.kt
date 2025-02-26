@@ -185,6 +185,7 @@ class BluetoothConnectionManager(
     }
 
     private fun reconnect() {
+        Log.i("BluetoothConnectionManager", "reconnect: " + isConnecting.get() + " " + isConnected)
         if (isConnecting.get() || isConnected) {
             Log.e("BluetoothConnectionManager", "reconnect: isConnecting or isConnected")
             return
@@ -231,6 +232,7 @@ class BluetoothConnectionManager(
         var disconnected = false
         try {
             socketLock.withLock {
+                Log.i("BluetoothConnectionManager", "disconnectInternal: " + isConnecting.get())
                 if (!isConnected && !isConnecting.get()) return
                 isConnected = false
                 isConnecting.set(false)

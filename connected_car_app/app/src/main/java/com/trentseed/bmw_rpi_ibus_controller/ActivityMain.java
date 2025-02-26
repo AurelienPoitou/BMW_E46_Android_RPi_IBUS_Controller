@@ -22,9 +22,8 @@ import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
 import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothConnectionManager;
 import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothHelper;
@@ -32,7 +31,6 @@ import com.trentseed.bmw_rpi_ibus_controller.common.BluetoothInterface;
 import com.trentseed.bmw_rpi_ibus_controller.common.LogConfig;
 import com.trentseed.bmw_rpi_ibus_controller.common.VoiceCommand;
 
-import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
@@ -76,25 +74,26 @@ public class ActivityMain extends AppCompatActivity implements BluetoothConnecti
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         onNewIntent(getIntent());
         setContentView(R.layout.activity_main);
-        // Pass the directory to store log files
-        File logDir = getExternalFilesDir(null);
-        LogConfig.configure(logDir);
+        if (savedInstanceState == null) {
+            // Pass the directory to store log files
+            LogConfig.configure(getExternalFilesDir(null));
+
+            // get layout objects
+            ivBmwEmblem = findViewById(R.id.ivBMWEmblem);
+            ivBtnRadio = findViewById(R.id.ivBtnRadio);
+            ivBtnMaps = findViewById(R.id.ivBtnMaps);
+            ivBtnMedia = findViewById(R.id.ivBtnMedia);
+            ivBtnDevices = findViewById(R.id.ivBtnDevices);
+            ivBtnFeatures = findViewById(R.id.ivBtnFeatures);
+            ivBtnNew3 = findViewById(R.id.ivBtnNew3);
+            ivBtnVoice = findViewById(R.id.ivBtnMic);
+            ivBtnGear = findViewById(R.id.ivBtnGear);
+            ivBluetoothStatus = findViewById(R.id.ivBluetoothStatus);
+            pbConnecting = findViewById(R.id.pbBluetoothConnecting);
+            tvDateTime = findViewById(R.id.tvDateTime);
+        }
 
         logger.info("onCreate: Activity created");
-
-        // get layout objects
-        ivBmwEmblem = findViewById(R.id.ivBMWEmblem);
-        ivBtnRadio = findViewById(R.id.ivBtnRadio);
-        ivBtnMaps = findViewById(R.id.ivBtnMaps);
-        ivBtnMedia = findViewById(R.id.ivBtnMedia);
-        ivBtnDevices = findViewById(R.id.ivBtnDevices);
-        ivBtnFeatures = findViewById(R.id.ivBtnFeatures);
-        ivBtnNew3 = findViewById(R.id.ivBtnNew3);
-        ivBtnVoice = findViewById(R.id.ivBtnMic);
-        ivBtnGear = findViewById(R.id.ivBtnGear);
-        ivBluetoothStatus = findViewById(R.id.ivBluetoothStatus);
-        pbConnecting = findViewById(R.id.pbBluetoothConnecting);
-        tvDateTime = findViewById(R.id.tvDateTime);
 
         // bind click handlers to layout objects
         ivBtnMaps.setOnClickListener(v -> {
@@ -134,9 +133,11 @@ public class ActivityMain extends AppCompatActivity implements BluetoothConnecti
                 result -> {
                     if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                         List<String> results = result.getData().getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-                        String spokenText = results.get(0);
-                        String resultText = VoiceCommand.processSpokenText(spokenText);
-                        showToast(resultText);
+                        if (results != null) {
+                            String spokenText = results.get(0);
+                            String resultText = VoiceCommand.processSpokenText(spokenText);
+                            showToast(resultText);
+                        }
                     }
                 }
         );
@@ -146,6 +147,7 @@ public class ActivityMain extends AppCompatActivity implements BluetoothConnecti
             Intent launchWindows = new Intent(ActivityMain.this, ActivityIBUS.class);
             startActivity(launchWindows);
         });
+        ivBmwEmblem.setOnClickListener(v -> initializeBluetooth());
 
         bluetoothHelper = new BluetoothHelper(this);
         if (!bluetoothHelper.checkBluetoothPermissions()) {
@@ -182,7 +184,7 @@ public class ActivityMain extends AppCompatActivity implements BluetoothConnecti
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_BLUETOOTH_PERMISSIONS) {
             boolean allPermissionsGranted = true;
@@ -199,7 +201,7 @@ public class ActivityMain extends AppCompatActivity implements BluetoothConnecti
                 onPermissionsDenied();
             }
         } else {
-            mBluetoothInterface.onRequestPermissionsResult(requestCode, permissions, grantResults);
+            mBluetoothInterface.onRequestPermissionsResult(requestCode, grantResults);
         }
     }
 
@@ -212,6 +214,7 @@ public class ActivityMain extends AppCompatActivity implements BluetoothConnecti
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        BluetoothInterface.getInstance().disconnect();
     }
 
     @Override
@@ -220,8 +223,10 @@ public class ActivityMain extends AppCompatActivity implements BluetoothConnecti
         _broadcastReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context ctx, Intent intent) {
-                if (Objects.requireNonNull(intent.getAction()).compareTo(Intent.ACTION_TIME_TICK) == 0)
+                if (Objects.requireNonNull(intent.getAction()).compareTo(Intent.ACTION_TIME_TICK) == 0) {
                     setDateTime();
+                    refreshConnectingStatus();
+                }
             }
         };
 
@@ -251,8 +256,6 @@ public class ActivityMain extends AppCompatActivity implements BluetoothConnecti
     }
 
     private void displaySpeechRecognizer() {
-        // Part 2: ActivityMain.java (Continued)
-        // ... (Code from previous response) ...
         Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         // Launch the speech recognizer activity
@@ -263,12 +266,11 @@ public class ActivityMain extends AppCompatActivity implements BluetoothConnecti
      * If Bluetooth connection is being established, show loader.
      */
     public void refreshConnectingStatus() {
-        //TODO - add isConnecting to bluetooth interface
-        //if (BluetoothInterface.isConnecting()) {
-        //    pbConnecting.setVisibility(View.VISIBLE);
-        //} else {
-        //    pbConnecting.setVisibility(View.GONE);
-        //}
+        if (BluetoothInterface.getInstance().isConnecting()) {
+            pbConnecting.setVisibility(View.VISIBLE);
+        } else {
+            pbConnecting.setVisibility(View.GONE);
+        }
     }
 
     /**
@@ -286,7 +288,7 @@ public class ActivityMain extends AppCompatActivity implements BluetoothConnecti
         runOnUiThread(() -> {
             Toast.makeText(this, "Bluetooth Connected", Toast.LENGTH_SHORT).show();
             updateBluetoothStatus();
-            pbConnecting.setVisibility(View.GONE);
+            refreshConnectingStatus();
         });
     }
 
@@ -295,30 +297,23 @@ public class ActivityMain extends AppCompatActivity implements BluetoothConnecti
         runOnUiThread(() -> {
             Toast.makeText(this, "Bluetooth Disconnected", Toast.LENGTH_SHORT).show();
             updateBluetoothStatus();
-            pbConnecting.setVisibility(View.GONE);
+            refreshConnectingStatus();
         });
     }
 
     @Override
-    public void onDataReceived(String data) {
-        runOnUiThread(() -> {
-            // ... (process received data) ...
-        });
-    }
+    public void onDataReceived(String data) {}
 
     @Override
     public void onConnecting() {
         runOnUiThread(() -> {
             Toast.makeText(this, "Bluetooth Connecting...", Toast.LENGTH_SHORT).show();
-            pbConnecting.setVisibility(View.VISIBLE);
+            refreshConnectingStatus();
         });
     }
 
     @Override
     public void onPermissionsDenied() {
-        runOnUiThread(() -> {
-            Toast.makeText(this, "Bluetooth Permissions Denied", Toast.LENGTH_SHORT).show();
-            // ... (handle permission denial, e.g., show a message to the user) ...
-        });
+        runOnUiThread(() -> Toast.makeText(this, "Bluetooth Permissions Denied", Toast.LENGTH_SHORT).show());
     }
 }

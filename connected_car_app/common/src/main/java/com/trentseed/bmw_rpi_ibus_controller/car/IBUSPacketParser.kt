@@ -1,10 +1,10 @@
 package com.trentseed.bmw_rpi_ibus_controller.car
 
 import com.trentseed.bmw_rpi_ibus_controller.common.IBUSPacket
-import java.util.logging.Logger
 import com.trentseed.bmw_rpi_ibus_controller.common.LogConfig
+import java.util.logging.Logger
 
-class IBUSPacketParser() {
+class IBUSPacketParser {
     private val logger: Logger = LogConfig.getLogger()
     private val carState: CarState = CarState.getInstance()
 
@@ -23,7 +23,6 @@ class IBUSPacketParser() {
         try {
             when {
                 packet.data.size <= 2 -> {}
-                packet.sourceId == 0xD0 -> parseLightControlModuleExtendedPacket(packet) // LCM Extended
                 packet.destinationId == 0x18 -> parseCdChangerPacket(packet) // CD Changer
                 packet.sourceId == 0x60 -> parsePdcPacket(packet) // PDC
                 packet.destinationId == 0x68 -> parseBmButtonPacket(packet) // BM Button
@@ -73,25 +72,21 @@ class IBUSPacketParser() {
 
     private fun parseInstrumentClusterPacket(packet: IBUSPacket) {
         // Example: Extract speed from the packet
-        if (packet.data.size >= 2 && packet.data[0] == 0x11) {
+        if (packet.data[0] == 0x11) {
             val ignitionState = if (packet.data[4] < 2) packet.data[4] else (0x02 and packet.data[4])
             carState.instrumentCluster.ignitionState = when (ignitionState) {
                 0 -> IgnitionState.OFF
                 1 -> IgnitionState.ACC
                 3 -> IgnitionState.ON
                 7 -> IgnitionState.START
-                else -> IgnitionState.OFF
+                else -> IgnitionState.UNKNOWN
             }
-            logger.info("IKE Country Coding")
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x14) {
-            logger.info("IKE Country Coding")
+        } else if (packet.data.size >= 2 && packet.data[0] == 0x13) {
+            carState.instrumentCluster.handbrakeOn = packet.data[1] and 0x01 == 0x01
+            carState.instrumentCluster.engineRunning = packet.data[2] and 0x01 == 0x01
+            carState.instrumentCluster.gear = if (packet.data[2] and 0x10 == 0x01) -1 else packet.data[2] and 0xF0
+            carState.instrumentCluster.fuelLevel = packet.data[7]
         } else if (packet.data.size >= 2 && packet.data[0] == 0x15) {
-            carState.instrumentCluster.coolantTemp = packet.data[1]
-            logger.info("IKE Coolant Temp: ${carState.instrumentCluster.coolantTemp}")
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x16) {
-            carState.instrumentCluster.speed = packet.data[1]
-            carState.instrumentCluster.rpm = packet.data[2]
-            logger.info("IKE Speed: ${carState.instrumentCluster.speed} RPM: ${carState.instrumentCluster.rpm}")
         } else if (packet.data.size >= 2 && packet.data[0] == 0x17) {
             carState.instrumentCluster.odometer = packet.data[1] + packet.data[2] shl 8 + packet.data[3] shl 16
             carState.instrumentCluster.serviceInterval = (packet.data[4] + packet.data[5]) * 50
@@ -101,29 +96,17 @@ class IBUSPacketParser() {
             carState.instrumentCluster.speed = packet.data[1]
             carState.instrumentCluster.rpm = packet.data[2] * 100
         } else if (packet.data.size >= 2 && packet.data[0] == 0x19) {
-            carState.instrumentCluster.coolantTemp = packet.data[2]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x1B) {
-            carState.  instrumentCluster.odometer = packet.data[1]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x3B) {
-            carState.instrumentCluster.speed = packet.data[1]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x3C) {
-            carState.instrumentCluster.rpm = packet.data[1] * 100
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x3D) {
-            carState.instrumentCluster.fuelLevel = packet.data[1]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x3E) {
-            carState.instrumentCluster.coolantTemp = packet.data[1]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x3F) {
-            carState.instrumentCluster.outsideTemp = packet.data[1]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x40) {
-            carState.instrumentCluster.odometer = packet.data[1]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x41) {
-            carState.instrumentCluster.tripOdometer = packet.data[1]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x42) {
-            carState.instrumentCluster.serviceInterval = packet.data[1]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x43) {
-            carState.instrumentCluster.gear = packet.data[1]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x54) {
-            logger.info("IKE VIN")
+            carState.instrumentCluster.outsideTemp = when{
+                packet.data[1] > 128 -> packet.data[1] - 256
+                else -> packet.data[1]
+            }
+            carState.instrumentCluster.coolantTemp = when{
+                packet.data[2] > 128 -> packet.data[2] - 256
+                else -> packet.data[2]
+            }
+        } else if (packet.data.size >= 2 && packet.data[0] == 0x24) {
+            val text = IBUSPacket.convertASCIIHexToString(packet.data.subList(3, packet.data.size))
+            logger.info("Display: " + text)
         } else {
             logger.info("Instrument Cluster packet: ${printIntListAsHex(packet.raw)}")
         }
@@ -131,26 +114,101 @@ class IBUSPacketParser() {
 
     private fun parseLightControlModulePacket(packet: IBUSPacket) {
         // Example: Extract headlight status from the packet
-        if (packet.data.size >= 2 && packet.data[0] == 0x02) {
-            carState.lightControlModule.headlights = when (packet.data[1]) {
-                0x00 -> LightStatus.OFF
-                0x01 -> LightStatus.PARKING
-                0x02 -> LightStatus.LOW_BEAM
-                0x03 -> LightStatus.HIGH_BEAM
-                else -> LightStatus.OFF
-            }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x03) {
-            carState.lightControlModule.fogLights = packet.data[1] == 0x01
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x04) {
-            carState.lightControlModule.turnSignalLeft = packet.data[1] == 0x01
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x05) {
-            carState.lightControlModule.turnSignalRight = packet.data[1] == 0x01
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x06) {
-            carState.lightControlModule.hazardLights = packet.data[1] == 0x01
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x07) {
-            carState.lightControlModule.interiorLights = packet.data[1] == 0x01
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x08) {
-            carState.lightControlModule.brakeLights = packet.data[1] == 0x01
+        if (packet.data[0] == 0x54) {
+            carState.lightControlModule.vin = IBUSPacket.convertASCIIHexToString(packet.data.subList(1, 6))
+            carState.lightControlModule.odometer = (packet.data[6] shl 8 + packet.data[7]) * 100
+            carState.lightControlModule.sinceServiceDays = packet.data[10] shl 8 + packet.data[11]
+            carState.lightControlModule.sinceServiceLiters = ((packet.data[8] shl 8 + packet.data[9]) and 0x7ff) * 10
+        } else if (packet.data[0] == 0x5B) {
+            // Lights
+            carState.lightControlModule.frontPositionLights = packet.data[1] and 0x01 == 1
+            carState.lightControlModule.lowBeamLights = packet.data[1] and 0x02 == 1
+            carState.lightControlModule.highBeamLights = packet.data[1] and 0x04 == 1
+            carState.lightControlModule.frontFogLights = packet.data[1] and 0x08 == 1
+            carState.lightControlModule.rearFogLights = packet.data[1] and 0x10 == 1
+            carState.lightControlModule.leftTurnSignal = packet.data[1] and 0x20 == 1
+            carState.lightControlModule.rightTurnSignal = packet.data[1] and 0x40 == 1
+            carState.lightControlModule.turnSignalFast = packet.data[1] and 0x80 == 1
+            carState.lightControlModule.brakeLights = packet.data[3] and 0x02 == 1
+            carState.lightControlModule.turnSignalSync = packet.data[3] and 0x04 == 1
+            carState.lightControlModule.rearPositionLights = packet.data[3] and 0x08 == 1
+            carState.lightControlModule.trailerPositionLights = packet.data[3] and 0x10 == 1
+            carState.lightControlModule.reverseLights = packet.data[3] and 0x20 == 1
+            carState.lightControlModule.trailerReverseLights = packet.data[3] and 0x40 == 1
+            carState.lightControlModule.hazardLights = packet.data[3] and 0x80 == 1
+            // Faults
+            carState.lightControlModule.frontPositionFault = packet.data[2] and 0x01 == 1
+            carState.lightControlModule.lowBeamFault = packet.data[2] and 0x02 == 1
+            carState.lightControlModule.highBeamFault = packet.data[2] and 0x04 == 1
+            carState.lightControlModule.frontFogFault = packet.data[2] and 0x08 == 1
+            carState.lightControlModule.rearFogFault = packet.data[2] and 0x10 == 1
+            carState.lightControlModule.leftTurnSignalFault = packet.data[2] and 0x20 == 1
+            carState.lightControlModule.rightTurnSignalFault = packet.data[2] and 0x40 == 1
+            carState.lightControlModule.licencePlateFault = packet.data[2] and 0x80 == 1
+            carState.lightControlModule.brakeLightRightFault = packet.data[4] and 0x01 == 1
+            carState.lightControlModule.brakeLightLeftFault = packet.data[4] and 0x02 == 1
+            carState.lightControlModule.rearRightPositionFault = packet.data[4] and 0x04 == 1
+            carState.lightControlModule.rearLeftPositionFault = packet.data[4] and 0x08 == 1
+            carState.lightControlModule.rightLowBeamFault = packet.data[4] and 0x10 == 1
+            carState.lightControlModule.leftLowBeamFault = packet.data[4] and 0x20 == 1
+        } else if (packet.data[0] == 0xA0) {
+            // Inputs
+            carState.lightControlModule.fireExtinguisher = packet.data[1] and 0x02 == 1
+            carState.lightControlModule.preHeatingFuelInjection = packet.data[1] and 0x04 == 1
+            carState.lightControlModule.carb = packet.data[1] and 0x10 == 1
+            carState.lightControlModule.keyInIgnition = packet.data[2] and 0x01 == 1
+            carState.lightControlModule.seatBeltsLock = packet.data[2] and 0x02 == 1
+            carState.lightControlModule.kfn = packet.data[2] and 0x20 == 1
+            carState.lightControlModule.armouredDoor = packet.data[2] and 0x40 == 1
+            carState.lightControlModule.brakeFluidLevel = packet.data[2] and 0x80 == 1
+            carState.lightControlModule.airSuspension = packet.data[4] and 0x01 == 1
+            carState.lightControlModule.holdUpAlarm = packet.data[4] and 0x02 == 1
+            carState.lightControlModule.washerFluidLevel = packet.data[4] and 0x04 == 1
+            carState.lightControlModule.engineFailSafe = packet.data[4] and 0x40 == 1
+            carState.lightControlModule.tyreDefect = packet.data[4] and 0x80 == 1
+            carState.lightControlModule.verticalAim = packet.data[7] and 0x02 == 1
+            carState.lightControlModule.failsafeMode = packet.data[9] and 0x01 == 1
+            carState.lightControlModule.sleepMode = packet.data[9] and 0x40 == 1
+            // Outputs
+            carState.lightControlModule.rearLeftLicence = packet.data[5] and 0x04 == 1
+            carState.lightControlModule.leftBrake = packet.data[5] and 0x08 == 1
+            carState.lightControlModule.rightBrake = packet.data[5] and 0x10 == 1
+            carState.lightControlModule.rightHighBeam = packet.data[5] and 0x20 == 1
+            carState.lightControlModule.leftHighBeam = packet.data[5] and 0x40 == 1
+            carState.lightControlModule.frontLeftPosition = packet.data[6] and 0x01 == 1
+            carState.lightControlModule.rearLeftInnerPosition = packet.data[6] and 0x02 == 1
+            carState.lightControlModule.frontLeftFog = packet.data[6] and 0x04 == 1
+            carState.lightControlModule.leftReverse = packet.data[6] and 0x08 == 1
+            carState.lightControlModule.leftLowBeam = packet.data[6] and 0x10 == 1
+            carState.lightControlModule.rightLowBeam = packet.data[6] and 0x20 == 1
+            carState.lightControlModule.frontRightFog = packet.data[6] and 0x40 == 1
+            carState.lightControlModule.rearRightFog = packet.data[6] and 0x80 == 1
+            carState.lightControlModule.rightLicence = packet.data[7] and 0x04 == 1
+            carState.lightControlModule.rearLeftPosition = packet.data[7] and 0x08 == 1
+            carState.lightControlModule.centerBrake = packet.data[7] and 0x10 == 1
+            carState.lightControlModule.frontRightPosition = packet.data[7] and 0x20 == 1
+            carState.lightControlModule.frontRightTurnSignal = packet.data[7] and 0x40 == 1
+            carState.lightControlModule.rearLeftTurnSignal = packet.data[7] and 0x80 == 1
+            carState.lightControlModule.rearRightTurnSignal = packet.data[8] and 0x02 == 1
+            carState.lightControlModule.rearLeftFog = packet.data[8] and 0x04 == 1
+            carState.lightControlModule.rearRightInnerPosition = packet.data[8] and 0x08 == 1
+            carState.lightControlModule.rearRightPosition = packet.data[8] and 0x10 == 1
+            carState.lightControlModule.sideLeftTurnSignal = packet.data[8] and 0x20 == 1
+            carState.lightControlModule.frontLeftTurnSignal = packet.data[8] and 0x40 == 1
+            carState.lightControlModule.rightReverse = packet.data[8] and 0x80 == 1
+            carState.lightControlModule.trailerFog = packet.data[9] and 0x10 == 1
+            // Switches
+            carState.lightControlModule.hazardSwitch = packet.data[2] and 0x10 == 1
+            carState.lightControlModule.highBeamFlashSwitch = packet.data[2] and 0x04 == 1
+            carState.lightControlModule.brakeLightSwitch = packet.data[3] and 0x01 == 1
+            carState.lightControlModule.highBeamSwitch = packet.data[3] and 0x02 == 1
+            carState.lightControlModule.frontFogSwitch = packet.data[3] and 0x08 == 1
+            carState.lightControlModule.rearFogSwitch = packet.data[3] and 0x10 == 1
+            carState.lightControlModule.positionSwitch = packet.data[3] and 0x20 == 1
+            carState.lightControlModule.rightTurnSignalSwitch = packet.data[3] and 0x40 == 1
+            carState.lightControlModule.leftTurnSignalSwitch = packet.data[3] and 0x80 == 1
+            carState.lightControlModule.lowBeam1Switch = packet.data[4] and 0x02 == 1
+            carState.lightControlModule.lowBeam2Switch = packet.data[4] and 0x04 == 1
         } else {
             logger.info("Light Control Module packet: ${printIntListAsHex(packet.raw)}")
         }
@@ -158,83 +216,86 @@ class IBUSPacketParser() {
 
     private fun parseGeneralModulePacket(packet: IBUSPacket) {
         // Example: Extract door status from the packet
-        if (packet.data.size >= 2 && packet.data[0] == 0x01) {
-            carState.generalModule.doorDriver = when (packet.data[1]) {
+        if (packet.data.size >= 2 && packet.data[0] == 0x72) {
+            carState.keyFob.keyNumber = packet.data[1] and 0x03
+            carState.keyFob.lowBattery = packet.data[1] and 0x01 == 1
+            carState.keyFob.lockButtonPressed = packet.data[1] and 0x10 == 1
+            carState.keyFob.unlockButtonPressed = packet.data[1] and 0x20 == 1
+            carState.keyFob.trunkButtonPressed = packet.data[1] and 0x40 == 1
+        } else if (packet.data.size >= 2 && packet.data[0] == 0x76) {
+
+        } else if (packet.data.size >= 2 && packet.data[0] == 0x77) {
+
+        } else if (packet.data.size >= 2 && packet.data[0] == 0x78) {
+
+        } else if (packet.data.size >= 2 && packet.data[0] == 0x7A) {
+            carState.generalModule.doorDriver = when (packet.data[1] and 0x01) {
                 0x00 -> DoorStatus.CLOSED
                 0x01 -> DoorStatus.OPEN
                 else -> DoorStatus.CLOSED
             }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x02) {
-            carState.generalModule.doorPassenger = when (packet.data[1]) {
+            carState.generalModule.doorPassenger = when (packet.data[1] and 0x02) {
                 0x00 -> DoorStatus.CLOSED
                 0x01 -> DoorStatus.OPEN
                 else -> DoorStatus.CLOSED
             }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x03) {
-            carState.generalModule.doorRearLeft = when (packet.data[1]) {
+            carState.generalModule.doorRearLeft = when (packet.data[1] and 0x04) {
                 0x00 -> DoorStatus.CLOSED
                 0x01 -> DoorStatus.OPEN
                 else -> DoorStatus.CLOSED
             }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x04) {
-            carState.generalModule.doorRearRight = when (packet.data[1]) {
+            carState.generalModule.doorRearRight = when (packet.data[1] and 0x08) {
                 0x00 -> DoorStatus.CLOSED
                 0x01 -> DoorStatus.OPEN
                 else -> DoorStatus.CLOSED
             }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x05) {
-            carState.generalModule.trunk = when (packet.data[1]) {
-                0x00 -> DoorStatus.CLOSED
-                0x01 -> DoorStatus.OPEN
-                else -> DoorStatus.CLOSED
-            }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x06) {
-            carState.generalModule.hood = when (packet.data[1]) {
-                0x00 -> DoorStatus.CLOSED
-                0x01 -> DoorStatus.OPEN
-                else -> DoorStatus.CLOSED
-            }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x07) {
-            carState.generalModule.windowDriver = when (packet.data[1]) {
-                0x00 -> WindowStatus.CLOSED
-                0x01 -> WindowStatus.OPEN
-                0x02 -> WindowStatus.VENT
-                else -> WindowStatus.CLOSED
-            }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x08) {
-            carState.generalModule.windowPassenger = when (packet.data[1]) {
-                0x00 -> WindowStatus.CLOSED
-                0x01 -> WindowStatus.OPEN
-                0x02 -> WindowStatus.VENT
-                else -> WindowStatus.CLOSED
-            }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x09) {
-            carState.generalModule.windowRearLeft = when (packet.data[1]) {
-                0x00 -> WindowStatus.CLOSED
-                0x01 -> WindowStatus.OPEN
-                0x02 -> WindowStatus.VENT
-                else -> WindowStatus.CLOSED
-            }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x0A) {
-            carState.generalModule.windowRearRight = when (packet.data[1]) {
-                0x00 -> WindowStatus.CLOSED
-                0x01 -> WindowStatus.OPEN
-                0x02 -> WindowStatus.VENT
-                else -> WindowStatus.CLOSED
-            }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x0B) {
-            carState.generalModule.lockStatus = when (packet.data[1]) {
+            carState.generalModule.lockStatus = when (packet.data[1] and 0x20) {
                 0x00 -> LockStatus.LOCKED
                 0x01 -> LockStatus.UNLOCKED
                 else -> LockStatus.LOCKED
             }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x0C) {
-            carState.generalModule.sunroof = when (packet.data[1]) {
+            carState.generalModule.windowDriver = when (packet.data[2] and 0x01) {
                 0x00 -> WindowStatus.CLOSED
                 0x01 -> WindowStatus.OPEN
                 0x02 -> WindowStatus.VENT
                 else -> WindowStatus.CLOSED
             }
+            carState.generalModule.windowPassenger = when (packet.data[2] and 0x02) {
+                0x00 -> WindowStatus.CLOSED
+                0x01 -> WindowStatus.OPEN
+                0x02 -> WindowStatus.VENT
+                else -> WindowStatus.CLOSED
+            }
+            carState.generalModule.windowRearLeft = when (packet.data[2] and 0x04) {
+                0x00 -> WindowStatus.CLOSED
+                0x01 -> WindowStatus.OPEN
+                0x02 -> WindowStatus.VENT
+                else -> WindowStatus.CLOSED
+            }
+            carState.generalModule.windowRearRight = when (packet.data[2] and 0x08) {
+                0x00 -> WindowStatus.CLOSED
+                0x01 -> WindowStatus.OPEN
+                0x02 -> WindowStatus.VENT
+                else -> WindowStatus.CLOSED
+            }
+            carState.generalModule.sunroof = when (packet.data[2] and 0x10) {
+                0x00 -> WindowStatus.CLOSED
+                0x01 -> WindowStatus.OPEN
+                0x02 -> WindowStatus.VENT
+                else -> WindowStatus.CLOSED
+            }
+            carState.generalModule.trunk = when (packet.data[2] and 0x20) {
+                0x00 -> DoorStatus.CLOSED
+                0x01 -> DoorStatus.OPEN
+                else -> DoorStatus.CLOSED
+            }
+            carState.generalModule.hood = when (packet.data[2] and 0x40) {
+                0x00 -> DoorStatus.CLOSED
+                0x01 -> DoorStatus.OPEN
+                else -> DoorStatus.CLOSED
+            }
+        } else if (packet.data.size >= 2 && packet.data[0] == 0x7D) {
+
         } else {
             logger.info("General Module packet: ${printIntListAsHex(packet.raw)}")
         }
@@ -294,18 +355,6 @@ class IBUSPacketParser() {
         }
     }
 
-    private fun parseLightControlModuleExtendedPacket(packet: IBUSPacket) {
-        if (packet.data.size >= 2 && packet.data[0] == 0x5B) {
-            logger.info("LCM State: ${packet.data.drop(1).joinToString(" ")}")
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x5C) {
-            logger.info("LCM DIM State")
-        } else if (packet.destinationId == 0x3F && packet.data.size >= 2 && packet.data[0] == 0xA0) {
-            logger.info("LCM Diag State")
-        } else {
-            logger.info("Light Control Module Extended packet: ${printIntListAsHex(packet.raw)}")
-        }
-    }
-
     private fun parseCdChangerPacket(packet: IBUSPacket) {
         if (packet.data == listOf(0x01)) {
             carState.cdChanger.isAlive = true
@@ -348,10 +397,12 @@ class IBUSPacketParser() {
     }
 
     private fun parsePdcPacket(packet: IBUSPacket) {
-        if (packet.data.size >= 2 && packet.data[0] == 0x90) {
+        if (packet.data[0] == 0x07) {
+            carState.pdc.values = packet.data.drop(1).map { it }
+        } else if (packet.data[0] == 0x90) {
             carState.pdc.isTurnedOn = true
             logger.info("PDC turned on")
-        } else if (packet.data.size >= 2 && packet.data[0] == 0xA0) {
+        } else if (packet.data[0] == 0xA0) {
             carState.pdc.values = packet.data.drop(1).map { it }
             logger.info("PDC value reply: ${carState.pdc.values.joinToString(" ")}")
         } else {
@@ -466,48 +517,55 @@ class IBUSPacketParser() {
     }
 
     private fun parseStwButtonPacket(packet: IBUSPacket) {
-        if (packet.data == listOf(0x01)) {
-            carState.stwButton.volUp = true
-        } else if (packet.data == listOf(0x02)) {
-            carState.stwButton.volDown = true
-        } else if (packet.data == listOf(0x03)) {
-            carState.stwButton.upPres = true
-        } else if (packet.data == listOf(0x04)) {
-            carState.stwButton.upHold = true
-        } else if (packet.data == listOf(0x05)) {
-            carState.stwButton.upRel = true
-        } else if (packet.data == listOf(0x06)) {
-            carState.stwButton.downPres = true
-        } else if (packet.data == listOf(0x07)) {
-            carState.stwButton.downHold = true
-        } else if (packet.data == listOf(0x08)) {
-            carState.stwButton.downRel = true
-        } else if (packet.data == listOf(0x09)) {
-            carState.stwButton.rtHold = true
-        } else if (packet.data == listOf(0x0A)) {
-            carState.stwButton.rtRel = true
-        } else if (packet.data == listOf(0x0B)) {
-            carState.stwButton.rtOn = true
-        } else if (packet.data == listOf(0x0C)) {
-            carState.stwButton.rtOff = true
-        } else if (packet.data == listOf(0x0D)) {
-            carState.stwButton.speakPres = true
-        } else if (packet.data == listOf(0x0E)) {
-            carState.stwButton.speakHold = true
-        } else if (packet.data == listOf(0x0F)) {
-            carState.stwButton.speakRel = true
-        } else {
-            logger.info("STW packet: ${printIntListAsHex(packet.raw)}")
-        }
-    }
-
-    private fun parseInstrumentClusterPacketExtended(packet: IBUSPacket) {
-        if (packet.data.size >= 2 && packet.data[0] == 0x02 && packet.data[1] == 0x00) {
-            logger.info("Instrument Cluster Extended: Check Control OK")
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x02) {
-            logger.info("Instrument Cluster Extended: Check Control Failure: " + packet.data[1])
-        } else {
-            logger.info("Instrument Cluster Extended packet: ${printIntListAsHex(packet.raw)}")
+        when (packet.data) {
+            listOf(0x01) -> {
+                carState.stwButton.volUp = true
+            }
+            listOf(0x02) -> {
+                carState.stwButton.volDown = true
+            }
+            listOf(0x03) -> {
+                carState.stwButton.upPres = true
+            }
+            listOf(0x04) -> {
+                carState.stwButton.upHold = true
+            }
+            listOf(0x05) -> {
+                carState.stwButton.upRel = true
+            }
+            listOf(0x06) -> {
+                carState.stwButton.downPres = true
+            }
+            listOf(0x07) -> {
+                carState.stwButton.downHold = true
+            }
+            listOf(0x08) -> {
+                carState.stwButton.downRel = true
+            }
+            listOf(0x09) -> {
+                carState.stwButton.rtHold = true
+            }
+            listOf(0x0A) -> {
+                carState.stwButton.rtRel = true
+            }
+            listOf(0x0B) -> {
+                carState.stwButton.rtOn = true
+            }
+            listOf(0x0C) -> {
+                carState.stwButton.rtOff = true
+            }
+            listOf(0x0D) -> {
+                carState.stwButton.speakPres = true
+            }
+            listOf(0x0E) -> {
+                carState.stwButton.speakHold = true
+            }
+            listOf(0x0F) -> {
+                carState.stwButton.speakRel = true
+            }
+            else -> {
+                logger.info("STW packet: ${printIntListAsHex(packet.raw)}")
+            }
         }
     }
 
@@ -599,7 +657,16 @@ class IBUSPacketParser() {
         compareBmButtonState(oldState.bmButton, newState.bmButton, changes)
         compareStwButtonState(oldState.stwButton, newState.stwButton, changes)
         compareGtState(oldState.gt, newState.gt, changes)
+        compareKeyfobState(oldState.keyFob, newState.keyFob, changes)
         return changes.toString()
+    }
+
+    private fun compareKeyfobState(oldState: KeyfobState, newState: KeyfobState, changes: StringBuilder) {
+        if (oldState.lowBattery != newState.lowBattery) changes.appendLine("  Keyfob Low Battery: ${oldState.lowBattery} -> ${newState.lowBattery}")
+        if (oldState.lockButtonPressed != newState.lockButtonPressed) changes.appendLine("  Keyfob Lock Button Pressed: ${oldState.lockButtonPressed} -> ${newState.lockButtonPressed}")
+        if (oldState.unlockButtonPressed != newState.unlockButtonPressed) changes.appendLine("  Keyfob Unlock Button Pressed: ${oldState.unlockButtonPressed} -> ${newState.unlockButtonPressed}")
+        if (oldState.trunkButtonPressed != newState.trunkButtonPressed) changes.appendLine("  Keyfob Trunk Button Pressed: ${oldState.trunkButtonPressed} -> ${newState.trunkButtonPressed}")
+        if (oldState.keyNumber != newState.keyNumber) changes.appendLine("  Keyfob Key Number: ${oldState.keyNumber} -> ${newState.keyNumber}")
     }
 
     private fun compareRadioState(oldState: RadioState, newState: RadioState, changes: StringBuilder) {
@@ -614,9 +681,6 @@ class IBUSPacketParser() {
     }
 
     private fun compareInstrumentClusterState(oldState: InstrumentClusterState, newState: InstrumentClusterState, changes: StringBuilder) {
-        if (oldState.vin != newState.vin) changes.appendLine("  Instrument Cluster Extended VIN: ${oldState.vin} -> ${newState.vin}")
-        if (oldState.countryCoding != newState.countryCoding) changes.appendLine("  Instrument Cluster Extended Country Coding: ${oldState.countryCoding} -> ${newState.countryCoding}")
-        if (oldState.ignitionState != newState.ignitionState) changes.appendLine("  Instrument Cluster Extended Ignition State: ${oldState.ignitionState} -> ${newState.ignitionState}")
         if (oldState.speed != newState.speed) changes.appendLine("  Instrument Cluster Speed: ${oldState.speed} -> ${newState.speed}")
         if (oldState.rpm != newState.rpm) changes.appendLine("  Instrument Cluster RPM: ${oldState.rpm} -> ${newState.rpm}")
         if (oldState.fuelLevel != newState.fuelLevel) changes.appendLine("  Instrument Cluster Fuel Level: ${oldState.fuelLevel} -> ${newState.fuelLevel}")
@@ -624,21 +688,114 @@ class IBUSPacketParser() {
         if (oldState.outsideTemp != newState.outsideTemp) changes.appendLine("  Instrument Cluster Outside Temp: ${oldState.outsideTemp} -> ${newState.outsideTemp}")
         if (oldState.odometer != newState.odometer) changes.appendLine("  Instrument Cluster Odometer: ${oldState.odometer} -> ${newState.odometer}")
         if (oldState.tripOdometer != newState.tripOdometer) changes.appendLine("  Instrument Cluster Trip Odometer: ${oldState.tripOdometer} -> ${newState.tripOdometer}")
+        if (oldState.gear != newState.gear) changes.appendLine("  Instrument Cluster Gear: ${oldState.gear} -> ${newState.gear}")
+        if (oldState.engineRunning != newState.engineRunning) changes.appendLine("  Instrument Cluster Gear: ${oldState.engineRunning} -> ${newState.engineRunning}")
+        if (oldState.handbrakeOn != newState.handbrakeOn) changes.appendLine("  Instrument Cluster Gear: ${oldState.handbrakeOn} -> ${newState.handbrakeOn}")
+        if (oldState.vin != newState.vin) changes.appendLine("  Instrument Cluster VIN: ${oldState.vin} -> ${newState.vin}")
+        if (oldState.countryCoding != newState.countryCoding) changes.appendLine("  Instrument Cluster Country Coding: ${oldState.countryCoding} -> ${newState.countryCoding}")
+        if (oldState.ignitionState != newState.ignitionState) changes.appendLine("  Instrument Cluster Ignition State: ${oldState.ignitionState} -> ${newState.ignitionState}")
         if (oldState.serviceInterval != newState.serviceInterval) changes.appendLine("  Instrument Cluster Service Interval: ${oldState.serviceInterval} -> ${newState.serviceInterval}")
         if (oldState.serviceInterval != newState.serviceInterval) changes.appendLine("  Instrument Cluster Service Interval Days: ${oldState.serviceIntervalDays} -> ${newState.serviceIntervalDays}")
         if (oldState.serviceInterval != newState.serviceInterval) changes.appendLine("  Instrument Cluster Service Interval Type: ${oldState.serviceIntervalType} -> ${newState.serviceIntervalType}")
-        if (oldState.gear != newState.gear) changes.appendLine("  Instrument Cluster Gear: ${oldState.gear} -> ${newState.gear}")
         if (oldState.checkControlMessages != newState.checkControlMessages) changes.appendLine("  Instrument Cluster Check Control Messages: ${oldState.checkControlMessages} -> ${newState.checkControlMessages}")
     }
 
     private fun compareLightControlModuleState(oldState: LightControlModuleState, newState: LightControlModuleState, changes: StringBuilder) {
-        if (oldState.headlights != newState.headlights) changes.appendLine("  Light Control Module Headlights: ${oldState.headlights} -> ${newState.headlights}")
-        if (oldState.fogLights != newState.fogLights) changes.appendLine("  Light Control Module Fog Lights: ${oldState.fogLights} -> ${newState.fogLights}")
-        if (oldState.turnSignalLeft != newState.turnSignalLeft) changes.appendLine("  Light Control Module Turn Signal Left: ${oldState.turnSignalLeft} -> ${newState.turnSignalLeft}")
-        if (oldState.turnSignalRight != newState.turnSignalRight) changes.appendLine("  Light Control Module Turn Signal Right: ${oldState.turnSignalRight} -> ${newState.turnSignalRight}")
-        if (oldState.hazardLights != newState.hazardLights) changes.appendLine("  Light Control Module Hazard Lights: ${oldState.hazardLights} -> ${newState.hazardLights}")
-        if (oldState.interiorLights != newState.interiorLights) changes.appendLine("  Light Control Module Interior Lights: ${oldState.interiorLights} -> ${newState.interiorLights}")
+        // Vehicle Data
+        if (oldState.vin != newState.vin) changes.appendLine("  Light Control Module VIN: ${oldState.vin} -> ${newState.vin}")
+        if (oldState.odometer != newState.odometer) changes.appendLine("  Light Control Module Odometer: ${oldState.odometer} -> ${newState.odometer}")
+        if (oldState.sinceServiceDays != newState.sinceServiceDays) changes.appendLine("  Light Control Module Since Service Days: ${oldState.sinceServiceDays} -> ${newState.sinceServiceDays}")
+        if (oldState.sinceServiceLiters != newState.sinceServiceLiters) changes.appendLine("  Light Control Module Since Service Liters: ${oldState.sinceServiceLiters} -> ${newState.sinceServiceLiters}")
+        // Lights
+        if (oldState.frontPositionLights != newState.frontPositionLights) changes.appendLine("  Light Control Module Front Position Lights: ${oldState.frontPositionLights} -> ${newState.frontPositionLights}")
+        if (oldState.lowBeamLights != newState.lowBeamLights) changes.appendLine("  Light Control Module Low Beam Lights: ${oldState.lowBeamLights} -> ${newState.lowBeamLights}")
+        if (oldState.highBeamLights != newState.highBeamLights) changes.appendLine("  Light Control Module High Beam Lights: ${oldState.highBeamLights} -> ${newState.highBeamLights}")
+        if (oldState.frontFogLights != newState.frontFogLights) changes.appendLine("  Light Control Module Front Fog Lights: ${oldState.frontFogLights} -> ${newState.frontFogLights}")
+        if (oldState.rearFogLights != newState.rearFogLights) changes.appendLine("  Light Control Module Rear Fog Lights: ${oldState.rearFogLights} -> ${newState.rearFogLights}")
+        if (oldState.leftTurnSignal != newState.leftTurnSignal) changes.appendLine("  Light Control Module Left Turn Signal: ${oldState.leftTurnSignal} -> ${newState.leftTurnSignal}")
+        if (oldState.rightTurnSignal != newState.rightTurnSignal) changes.appendLine("  Light Control Module Right Turn Signal: ${oldState.rightTurnSignal} -> ${newState.rightTurnSignal}")
+        if (oldState.turnSignalFast != newState.turnSignalFast) changes.appendLine("  Light Control Module Turn Signal Fast: ${oldState.turnSignalFast} -> ${newState.turnSignalFast}")
         if (oldState.brakeLights != newState.brakeLights) changes.appendLine("  Light Control Module Brake Lights: ${oldState.brakeLights} -> ${newState.brakeLights}")
+        if (oldState.turnSignalSync != newState.turnSignalSync) changes.appendLine("  Light Control Module Turn Signal Sync: ${oldState.turnSignalSync} -> ${newState.turnSignalSync}")
+        if (oldState.rearPositionLights != newState.rearPositionLights) changes.appendLine("  Light Control Module Rear Position Lights: ${oldState.rearPositionLights} -> ${newState.rearPositionLights}")
+        if (oldState.trailerPositionLights != newState.trailerPositionLights) changes.appendLine("  Light Control Module Trailer Position Lights: ${oldState.trailerPositionLights} -> ${newState.trailerPositionLights}")
+        if (oldState.reverseLights != newState.reverseLights) changes.appendLine("  Light Control Module Reverse Lights: ${oldState.reverseLights} -> ${newState.reverseLights}")
+        if (oldState.trailerReverseLights != newState.trailerReverseLights) changes.appendLine("  Light Control Module Trailer Reverse Lights: ${oldState.trailerReverseLights} -> ${newState.trailerReverseLights}")
+        if (oldState.hazardLights != newState.hazardLights) changes.appendLine("  Light Control Module Hazard Lights: ${oldState.hazardLights} -> ${newState.hazardLights}")
+        // Faults
+        if (oldState.frontPositionFault != newState.frontPositionFault) changes.appendLine("  Light Control Module Front Position Fault: ${oldState.frontPositionFault} -> ${newState.frontPositionFault}")
+        if (oldState.lowBeamFault != newState.lowBeamFault) changes.appendLine("  Light Control Module Low Beam Fault: ${oldState.lowBeamFault} -> ${newState.lowBeamFault}")
+        if (oldState.highBeamFault != newState.highBeamFault) changes.appendLine("  Light Control Module High Beam Fault: ${oldState.highBeamFault} -> ${newState.highBeamFault}")
+        if (oldState.frontFogFault != newState.frontFogFault) changes.appendLine("  Light Control Module Front Fog Fault: ${oldState.frontFogFault} -> ${newState.frontFogFault}")
+        if (oldState.rearFogFault != newState.rearFogFault) changes.appendLine("  Light Control Module Rear Fog Fault: ${oldState.rearFogFault} -> ${newState.rearFogFault}")
+        if (oldState.leftTurnSignalFault != newState.leftTurnSignalFault) changes.appendLine("  Light Control Module Left Turn Signal Fault: ${oldState.leftTurnSignalFault} -> ${newState.leftTurnSignalFault}")
+        if (oldState.rightTurnSignalFault != newState.rightTurnSignalFault) changes.appendLine("  Light Control Module Right Turn Signal Fault: ${oldState.rightTurnSignalFault} -> ${newState.rightTurnSignalFault}")
+        if (oldState.licencePlateFault != newState.licencePlateFault) changes.appendLine("  Light Control Module Licence Plate Fault: ${oldState.licencePlateFault} -> ${newState.licencePlateFault}")
+        if (oldState.brakeLightRightFault != newState.brakeLightRightFault) changes.appendLine("  Light Control Module Brake Light Right Fault: ${oldState.brakeLightRightFault} -> ${newState.brakeLightRightFault}")
+        if (oldState.brakeLightLeftFault != newState.brakeLightLeftFault) changes.appendLine("  Light Control Module Brake Light Left Fault: ${oldState.brakeLightLeftFault} -> ${newState.brakeLightLeftFault}")
+        if (oldState.rearRightPositionFault != newState.rearRightPositionFault) changes.appendLine("  Light Control Module Rear Right Position Fault: ${oldState.rearRightPositionFault} -> ${newState.rearRightPositionFault}")
+        if (oldState.rearLeftPositionFault != newState.rearLeftPositionFault) changes.appendLine("  Light Control Module Rear Left Position Fault: ${oldState.rearLeftPositionFault} -> ${newState.rearLeftPositionFault}")
+        if (oldState.rightLowBeamFault != newState.rightLowBeamFault) changes.appendLine("  Light Control Module Right Low Beam Fault: ${oldState.rightLowBeamFault} -> ${newState.rightLowBeamFault}")
+        if (oldState.leftLowBeamFault != newState.leftLowBeamFault) changes.appendLine("  Light Control Module Left Low Beam Fault: ${oldState.leftLowBeamFault} -> ${newState.leftLowBeamFault}")
+        // Switches
+        if (oldState.positionSwitch != newState.positionSwitch) changes.appendLine("  Light Control Module Position Switch: ${oldState.positionSwitch} -> ${newState.positionSwitch}")
+        if (oldState.lowBeam1Switch != newState.lowBeam1Switch) changes.appendLine("  Light Control Module Low Beam 1 Switch: ${oldState.lowBeam1Switch} -> ${newState.lowBeam1Switch}")
+        if (oldState.lowBeam2Switch != newState.lowBeam2Switch) changes.appendLine("  Light Control Module Low Beam 2 Switch: ${oldState.lowBeam2Switch} -> ${newState.lowBeam2Switch}")
+        if (oldState.highBeamSwitch != newState.highBeamSwitch) changes.appendLine("  Light Control Module High Beam Switch: ${oldState.highBeamSwitch} -> ${newState.highBeamSwitch}")
+        if (oldState.frontFogSwitch != newState.frontFogSwitch) changes.appendLine("  Light Control Module Front Fog Switch: ${oldState.frontFogSwitch} -> ${newState.frontFogSwitch}")
+        if (oldState.rearFogSwitch != newState.rearFogSwitch) changes.appendLine("  Light Control Module Rear Fog Switch: ${oldState.rearFogSwitch} -> ${newState.rearFogSwitch}")
+        if (oldState.leftTurnSignalSwitch != newState.leftTurnSignalSwitch) changes.appendLine("  Light Control Module Left Turn Signal Switch: ${oldState.leftTurnSignalSwitch} -> ${newState.leftTurnSignalSwitch}")
+        if (oldState.rightTurnSignalSwitch != newState.rightTurnSignalSwitch) changes.appendLine("  Light Control Module Right Turn Signal Switch: ${oldState.rightTurnSignalSwitch} -> ${newState.rightTurnSignalSwitch}")
+        if (oldState.brakeLightSwitch != newState.brakeLightSwitch) changes.appendLine("  Light Control Module Brake Light Switch: ${oldState.brakeLightSwitch} -> ${newState.brakeLightSwitch}")
+        if (oldState.highBeamFlashSwitch != newState.highBeamFlashSwitch) changes.appendLine("  Light Control Module High Beam Flash Switch: ${oldState.highBeamFlashSwitch} -> ${newState.highBeamFlashSwitch}")
+        if (oldState.hazardSwitch != newState.hazardSwitch) changes.appendLine("  Light Control Module Hazard Switch: ${oldState.hazardSwitch} -> ${newState.hazardSwitch}")
+        // Inputs
+        if (oldState.fireExtinguisher != newState.fireExtinguisher) changes.appendLine("  Light Control Module Fire Extinguisher: ${oldState.fireExtinguisher} -> ${newState.fireExtinguisher}")
+        if (oldState.preHeatingFuelInjection != newState.preHeatingFuelInjection) changes.appendLine("  Light Control Module Pre-Heating Fuel Injection: ${oldState.preHeatingFuelInjection} -> ${newState.preHeatingFuelInjection}")
+        if (oldState.carb != newState.carb) changes.appendLine("  Light Control Module Carb: ${oldState.carb} -> ${newState.carb}")
+        if (oldState.keyInIgnition != newState.keyInIgnition) changes.appendLine("  Light Control Module Key In Ignition: ${oldState.keyInIgnition} -> ${newState.keyInIgnition}")
+        if (oldState.seatBeltsLock != newState.seatBeltsLock) changes.appendLine("  Light Control Module Seat Belts Lock: ${oldState.seatBeltsLock} -> ${newState.seatBeltsLock}")
+        if (oldState.kfn != newState.kfn) changes.appendLine("  Light Control Module KFN: ${oldState.kfn} -> ${newState.kfn}")
+        if (oldState.armouredDoor != newState.armouredDoor) changes.appendLine("  Light Control Module Armoured Door: ${oldState.armouredDoor} -> ${newState.armouredDoor}")
+        if (oldState.brakeFluidLevel != newState.brakeFluidLevel) changes.appendLine("  Light Control Module Brake Fluid Level: ${oldState.brakeFluidLevel} -> ${newState.brakeFluidLevel}")
+        if (oldState.airSuspension != newState.airSuspension) changes.appendLine("  Light Control Module Air Suspension: ${oldState.airSuspension} -> ${newState.airSuspension}")
+        if (oldState.holdUpAlarm != newState.holdUpAlarm) changes.appendLine("  Light Control Module Hold Up Alarm: ${oldState.holdUpAlarm} -> ${newState.holdUpAlarm}")
+        if (oldState.washerFluidLevel != newState.washerFluidLevel) changes.appendLine("  Light Control Module Washer Fluid Level: ${oldState.washerFluidLevel} -> ${newState.washerFluidLevel}")
+        if (oldState.engineFailSafe != newState.engineFailSafe) changes.appendLine("  Light Control Module Engine Fail Safe: ${oldState.engineFailSafe} -> ${newState.engineFailSafe}")
+        if (oldState.tyreDefect != newState.tyreDefect) changes.appendLine("  Light Control Module Tyre Defect: ${oldState.tyreDefect} -> ${newState.tyreDefect}")
+        if (oldState.verticalAim != newState.verticalAim) changes.appendLine("  Light Control Module Vertical Aim: ${oldState.verticalAim} -> ${newState.verticalAim}")
+        if (oldState.failsafeMode != newState.failsafeMode) changes.appendLine("  Light Control Module Failsafe Mode: ${oldState.failsafeMode} -> ${newState.failsafeMode}")
+        if (oldState.sleepMode != newState.sleepMode) changes.appendLine("  Light Control Module Sleep Mode: ${oldState.sleepMode} -> ${newState.sleepMode}")
+        // Outputs
+        if (oldState.frontLeftPosition != newState.frontLeftPosition) changes.appendLine("  Light Control Module Front Left Position: ${oldState.frontLeftPosition} -> ${newState.frontLeftPosition}")
+        if (oldState.frontRightPosition != newState.frontRightPosition) changes.appendLine("  Light Control Module Front Right Position: ${oldState.frontRightPosition} -> ${newState.frontRightPosition}")
+        if (oldState.leftLowBeam != newState.leftLowBeam) changes.appendLine("  Light Control Module Left Low Beam: ${oldState.leftLowBeam} -> ${newState.leftLowBeam}")
+        if (oldState.rightLowBeam != newState.rightLowBeam) changes.appendLine("  Light Control Module Right Low Beam: ${oldState.rightLowBeam} -> ${newState.rightLowBeam}")
+        if (oldState.leftHighBeam != newState.leftHighBeam) changes.appendLine("  Light Control Module Left High Beam: ${oldState.leftHighBeam} -> ${newState.leftHighBeam}")
+        if (oldState.rightHighBeam != newState.rightHighBeam) changes.appendLine("  Light Control Module Right High Beam: ${oldState.rightHighBeam} -> ${newState.rightHighBeam}")
+        if (oldState.frontLeftFog != newState.frontLeftFog) changes.appendLine("  Light Control Module Front Left Fog: ${oldState.frontLeftFog} -> ${newState.frontLeftFog}")
+        if (oldState.frontRightFog != newState.frontRightFog) changes.appendLine("  Light Control Module Front Right Fog: ${oldState.frontRightFog} -> ${newState.frontRightFog}")
+        if (oldState.frontLeftTurnSignal != newState.frontLeftTurnSignal) changes.appendLine("  Light Control Module Front Left Turn Signal: ${oldState.frontLeftTurnSignal} -> ${newState.frontLeftTurnSignal}")
+        if (oldState.frontRightTurnSignal != newState.frontRightTurnSignal) changes.appendLine("  Light Control Module Front Right Turn Signal: ${oldState.frontRightTurnSignal} -> ${newState.frontRightTurnSignal}")
+        if (oldState.rearLeftPosition != newState.rearLeftPosition) changes.appendLine("  Light Control Module Rear Left Position: ${oldState.rearLeftPosition} -> ${newState.rearLeftPosition}")
+        if (oldState.rearRightPosition != newState.rearRightPosition) changes.appendLine("  Light Control Module Rear Right Position: ${oldState.rearRightPosition} -> ${newState.rearRightPosition}")
+        if (oldState.rearLeftInnerPosition != newState.rearLeftInnerPosition) changes.appendLine("  Light Control Module Rear Left Inner Position: ${oldState.rearLeftInnerPosition} -> ${newState.rearLeftInnerPosition}")
+        if (oldState.rearRightInnerPosition != newState.rearRightInnerPosition) changes.appendLine("  Light Control Module Rear Right Inner Position: ${oldState.rearRightInnerPosition} -> ${newState.rearRightInnerPosition}")
+        if (oldState.rearLeftFog != newState.rearLeftFog) changes.appendLine("  Light Control Module Rear Left Fog: ${oldState.rearLeftFog} -> ${newState.rearLeftFog}")
+        if (oldState.rearRightFog != newState.rearRightFog) changes.appendLine("  Light Control Module Rear Right Fog: ${oldState.rearRightFog} -> ${newState.rearRightFog}")
+        if (oldState.leftReverse != newState.leftReverse) changes.appendLine("  Light Control Module Left Reverse: ${oldState.leftReverse} -> ${newState.leftReverse}")
+        if (oldState.rightReverse != newState.rightReverse) changes.appendLine("  Light Control Module Right Reverse: ${oldState.rightReverse} -> ${newState.rightReverse}")
+        if (oldState.rearLeftTurnSignal != newState.rearLeftTurnSignal) changes.appendLine("  Light Control Module Rear Left Turn Signal: ${oldState.rearLeftTurnSignal} -> ${newState.rearLeftTurnSignal}")
+        if (oldState.rearRightTurnSignal != newState.rearRightTurnSignal) changes.appendLine("  Light Control Module Rear Right Turn Signal: ${oldState.rearRightTurnSignal} -> ${newState.rearRightTurnSignal}")
+        if (oldState.leftBrake != newState.leftBrake) changes.appendLine("  Light Control Module Left Brake: ${oldState.leftBrake} -> ${newState.leftBrake}")
+        if (oldState.rightBrake != newState.rightBrake) changes.appendLine("  Light Control Module Right Brake: ${oldState.rightBrake} -> ${newState.rightBrake}")
+        if (oldState.centerBrake != newState.centerBrake) changes.appendLine("  Light Control Module Center Brake: ${oldState.centerBrake} -> ${newState.centerBrake}")
+        if (oldState.rearLeftLicence != newState.rearLeftLicence) changes.appendLine("  Light Control Module Rear Left Licence: ${oldState.rearLeftLicence} -> ${newState.rearLeftLicence}")
+        if (oldState.rightLicence != newState.rightLicence) changes.appendLine("  Light Control Module Right Licence: ${oldState.rightLicence} -> ${newState.rightLicence}")
+        if (oldState.trailerReverse != newState.trailerReverse) changes.appendLine("  Light Control Module Trailer Reverse: ${oldState.trailerReverse} -> ${newState.trailerReverse}")
+        if (oldState.trailerFog != newState.trailerFog) changes.appendLine("  Light Control Module Trailer Fog: ${oldState.trailerFog} -> ${newState.trailerFog}")
+        if (oldState.sideLeftTurnSignal != newState.sideLeftTurnSignal) changes.appendLine("  Light Control Module Side Left Turn Signal: ${oldState.sideLeftTurnSignal} -> ${newState.sideLeftTurnSignal}")
+        if (oldState.sideRightTurnSignal != newState.sideRightTurnSignal) changes.appendLine("  Light Control Module Side Right Turn Signal: ${oldState.sideRightTurnSignal} -> ${newState.sideRightTurnSignal}")
     }
 
     private fun compareGeneralModuleState(oldState: GeneralModuleState, newState: GeneralModuleState, changes: StringBuilder) {

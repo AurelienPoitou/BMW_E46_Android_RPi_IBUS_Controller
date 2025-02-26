@@ -1,7 +1,5 @@
 package com.trentseed.bmw_rpi_ibus_controller.car
 
-import androidx.core.graphics.values
-
 class CarState private constructor(
     val radio: RadioState,
     val instrumentCluster: InstrumentClusterState,
@@ -13,8 +11,10 @@ class CarState private constructor(
     val pdc: PdcState,
     val bmButton: BmButtonState,
     val stwButton: StwButtonState,
-    val gt: GtState
+    val gt: GtState,
+    val keyFob: KeyfobState
 ) {
+
     // Primary constructor for initial creation
     private constructor() : this(
         RadioState(),
@@ -27,8 +27,10 @@ class CarState private constructor(
         PdcState(),
         BmButtonState(),
         StwButtonState(),
-        GtState()
+        GtState(),
+        KeyfobState()
     )
+
     companion object {
         @Volatile
         private var instance: CarState? = null
@@ -52,161 +54,9 @@ class CarState private constructor(
             pdc.copy(),
             bmButton.copy(),
             stwButton.copy(),
-            gt.copy()
+            gt.copy(),
+            keyFob.copy()
         )
-    }
-
-    fun getCarState(): String {
-        val sb = StringBuilder()
-        sb.appendLine("--- Current Car State ---")
-
-        sb.appendLine("Radio State:")
-        sb.appendLine("  Power: ${radio.power}")
-        sb.appendLine("  Band: ${radio.band}")
-        sb.appendLine("  Frequency: ${radio.frequency}")
-        sb.appendLine("  Volume: ${radio.volume}")
-        sb.appendLine("  Station Name: ${radio.stationName}")
-        sb.appendLine("  Mute: ${radio.mute}")
-        sb.appendLine("  CD Changer Track: ${radio.cdChangerTrack}")
-        sb.appendLine("  CD Changer Disc: ${radio.cdChangerDisc}")
-
-        sb.appendLine("Instrument Cluster State:")
-        sb.appendLine("  Speed: ${instrumentCluster.speed}")
-        sb.appendLine("  RPM: ${instrumentCluster.rpm}")
-        sb.appendLine("  Fuel Level: ${instrumentCluster.fuelLevel}")
-        sb.appendLine("  Coolant Temp: ${instrumentCluster.coolantTemp}")
-        sb.appendLine("  Outside Temp: ${instrumentCluster.outsideTemp}")
-        sb.appendLine("  Odometer: ${instrumentCluster.odometer}")
-        sb.appendLine("  Trip Odometer: ${instrumentCluster.tripOdometer}")
-        sb.appendLine("  Service Interval: ${instrumentCluster.serviceInterval}")
-        sb.appendLine("  Gear: ${instrumentCluster.gear}")
-        sb.appendLine("  Check Control Messages: ${instrumentCluster.checkControlMessages}")
-
-        sb.appendLine("Light Control Module State:")
-        sb.appendLine("  Headlights: ${lightControlModule.headlights}")
-        sb.appendLine("  Fog Lights: ${lightControlModule.fogLights}")
-        sb.appendLine("  Turn Signal Left: ${lightControlModule.turnSignalLeft}")
-        sb.appendLine("  Turn Signal Right: ${lightControlModule.turnSignalRight}")
-        sb.appendLine("  Hazard Lights: ${lightControlModule.hazardLights}")
-        sb.appendLine("  Interior Lights: ${lightControlModule.interiorLights}")
-        sb.appendLine("  Brake Lights: ${lightControlModule.brakeLights}")
-
-        sb.appendLine("General Module State:")
-        sb.appendLine("  Door Driver: ${generalModule.doorDriver}")
-        sb.appendLine("  Door Passenger: ${generalModule.doorPassenger}")
-        sb.appendLine("  Door Rear Left: ${generalModule.doorRearLeft}")
-        sb.appendLine("  Door Rear Right: ${generalModule.doorRearRight}")
-        sb.appendLine("  Trunk: ${generalModule.trunk}")
-        sb.appendLine("  Hood: ${generalModule.hood}")
-        sb.appendLine("  Window Driver: ${generalModule.windowDriver}")
-        sb.appendLine("  Window Passenger: ${generalModule.windowPassenger}")
-        sb.appendLine("  Window Rear Left: ${generalModule.windowRearLeft}")
-        sb.appendLine("  Window Rear Right: ${generalModule.windowRearRight}")
-        sb.appendLine("  Lock Status: ${generalModule.lockStatus}")
-        sb.appendLine("  Sunroof: ${generalModule.sunroof}")
-
-        sb.appendLine("HVAC State:")
-        sb.appendLine("  Mode: ${hvac.mode}")
-        sb.appendLine("  Fan Speed: ${hvac.fanSpeed}")
-        sb.appendLine("  Temperature Driver: ${hvac.temperatureDriver}")
-        sb.appendLine("  Temperature Passenger: ${hvac.temperaturePassenger}")
-        sb.appendLine("  Air Distribution: ${hvac.airDistribution}")
-        sb.appendLine("  AC: ${hvac.ac}")
-        sb.appendLine("  Recirculate: ${hvac.recirculate}")
-        sb.appendLine("  Defrost: ${hvac.defrost}")
-
-        sb.appendLine("Multi-Function Steering Wheel State:")
-        sb.appendLine("  Button Pressed: ${multiFunctionSteeringWheel.buttonPressed}")
-
-        sb.appendLine("CD Changer State:")
-        sb.appendLine("  isAlive: ${cdChanger.isAlive}")
-        sb.appendLine("  isPlaying: ${cdChanger.isPlaying}")
-        sb.appendLine("  isPaused: ${cdChanger.isPaused}")
-        sb.appendLine("  isStopped: ${cdChanger.isStopped}")
-        sb.appendLine("  isScanning: ${cdChanger.isScanning}")
-        sb.appendLine("  isRandom: ${cdChanger.isRandom}")
-        sb.appendLine("  currentDisc: ${cdChanger.currentDisc}")
-        sb.appendLine("  currentTrack: ${cdChanger.currentTrack}")
-
-        sb.appendLine("PDC State:")
-        sb.appendLine("  isTurnedOn: ${pdc.isTurnedOn}")
-        sb.appendLine("  values: ${pdc.values}")
-
-        sb.appendLine("BM Button State:")
-        sb.appendLine("  nextHold: ${bmButton.nextHold}")
-        sb.appendLine("  nextRel: ${bmButton.nextRel}")
-        sb.appendLine("  prevHold: ${bmButton.prevHold}")
-        sb.appendLine("  prevRel: ${bmButton.prevRel}")
-        sb.appendLine("  reverseHold: ${bmButton.reverseHold}")
-        sb.appendLine("  reverseRel: ${bmButton.reverseRel}")
-        sb.appendLine("  dolbyPres: ${bmButton.dolbyPres}")
-        sb.appendLine("  dolbyHold: ${bmButton.dolbyHold}")
-        sb.appendLine("  dolbyRel: ${bmButton.dolbyRel}")
-        sb.appendLine("  rdsPres: ${bmButton.rdsPres}")
-        sb.appendLine("  rdsHold: ${bmButton.rdsHold}")
-        sb.appendLine("  rdsRel: ${bmButton.rdsRel}")
-        sb.appendLine("  ejectPres: ${bmButton.ejectPres}")
-        sb.appendLine("  ejectHold: ${bmButton.ejectHold}")
-        sb.appendLine("  ejectRel: ${bmButton.ejectRel}")
-        sb.appendLine("  tonePres: ${bmButton.tonePres}")
-        sb.appendLine("  toneHold: ${bmButton.toneHold}")
-        sb.appendLine("  toneRel: ${bmButton.toneRel}")
-        sb.appendLine("  selectPres: ${bmButton.selectPres}")
-        sb.appendLine("  selectHold: ${bmButton.selectHold}")
-        sb.appendLine("  selectRel: ${bmButton.selectRel}")
-        sb.appendLine("  volRight: ${bmButton.volRight}")
-        sb.appendLine("  volLeft: ${bmButton.volLeft}")
-        sb.appendLine("  volRel: ${bmButton.volRel}")
-        sb.appendLine("  volHold: ${bmButton.volHold}")
-        sb.appendLine("  modePres: ${bmButton.modePres}")
-        sb.appendLine("  modeHold: ${bmButton.modeHold}")
-        sb.appendLine("  modeRel: ${bmButton.modeRel}")
-        sb.appendLine("  fmPres: ${bmButton.fmPres}")
-        sb.appendLine("  fmHold: ${bmButton.fmHold}")
-        sb.appendLine("  fmRel: ${bmButton.fmRel}")
-        sb.appendLine("  amPres: ${bmButton.amPres}")
-        sb.appendLine("  amHold: ${bmButton.amHold}")
-        sb.appendLine("  amRel: ${bmButton.amRel}")
-        sb.appendLine("  screenPres: ${bmButton.screenPres}")
-        sb.appendLine("  screenHold: ${bmButton.screenHold}")
-        sb.appendLine("  screenRel: ${bmButton.screenRel}")
-        sb.appendLine("  button1Hold: ${bmButton.button1Hold}")
-        sb.appendLine("  button1Rel: ${bmButton.button1Rel}")
-        sb.appendLine("  button2Hold: ${bmButton.button2Hold}")
-        sb.appendLine("  button2Rel: ${bmButton.button2Rel}")
-        sb.appendLine("  button3Hold: ${bmButton.button3Hold}")
-        sb.appendLine("  button3Rel: ${bmButton.button3Rel}")
-        sb.appendLine("  button4Hold: ${bmButton.button4Hold}")
-        sb.appendLine("  button4Rel: ${bmButton.button4Rel}")
-        sb.appendLine("  button5Hold: ${bmButton.button5Hold}")
-        sb.appendLine("  button5Rel: ${bmButton.button5Rel}")
-        sb.appendLine("  button6Hold: ${bmButton.button6Hold}")
-        sb.appendLine("  button6Rel: ${bmButton.button6Rel}")
-
-        sb.appendLine("STW Button State:")
-        sb.appendLine("  volUp: ${stwButton.volUp}")
-        sb.appendLine("  volDown: ${stwButton.volDown}")
-        sb.appendLine("  upPres: ${stwButton.upPres}")
-        sb.appendLine("  upHold: ${stwButton.upHold}")
-        sb.appendLine("  upRel: ${stwButton.upRel}")
-        sb.appendLine("  downPres: ${stwButton.downPres}")
-        sb.appendLine("  downHold: ${stwButton.downHold}")
-        sb.appendLine("  downRel: ${stwButton.downRel}")
-        sb.appendLine("  rtHold: ${stwButton.rtHold}")
-        sb.appendLine("  rtRel: ${stwButton.rtRel}")
-        sb.appendLine("  rtOn: ${stwButton.rtOn}")
-        sb.appendLine("  rtOff: ${stwButton.rtOff}")
-        sb.appendLine("  speakPres: ${stwButton.speakPres}")
-        sb.appendLine("  speakHold: ${stwButton.speakHold}")
-        sb.appendLine("  speakRel: ${stwButton.speakRel}")
-
-        sb.appendLine("GT State:")
-        sb.appendLine("  isTvOn: ${gt.isTvOn}")
-        sb.appendLine("  mode: ${gt.mode}")
-        sb.appendLine("  modebm23: ${gt.modebm23}")
-
-        sb.appendLine("--- End Car State ---")
-        return sb.toString()
     }
 }
 
@@ -419,4 +269,22 @@ enum class GtMode {
     TAPE,
     AUX,
     RADIO
+}
+
+data class KeyfobState(
+    var keyNumber: Int = 0,
+    var lowBattery: Boolean = false,
+    var lockButtonPressed: Boolean = false,
+    var unlockButtonPressed: Boolean = false,
+    var trunkButtonPressed: Boolean = false
+) {
+    fun copy(): KeyfobState {
+        return KeyfobState(
+            keyNumber,
+            lowBattery,
+            lockButtonPressed,
+            unlockButtonPressed,
+            trunkButtonPressed
+        )
+    }
 }
