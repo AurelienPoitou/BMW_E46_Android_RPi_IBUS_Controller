@@ -85,7 +85,7 @@ public class BluetoothInterface {
                     @Override
                     public void onDataReceived(@NonNull String data) {
                         IBUSPacket[] iBusPackets = BluetoothDataHolder.INSTANCE.updateData(data);
-                        if (iBusPackets.length > 0) {
+                        if (mIBUSPacketListener != null && iBusPackets.length > 0) {
                             mIBUSPacketListener.onIBUSPacketReceived(iBusPackets);
                         }
                     }

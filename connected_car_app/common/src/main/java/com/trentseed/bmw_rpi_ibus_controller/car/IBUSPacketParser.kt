@@ -2,7 +2,11 @@ package com.trentseed.bmw_rpi_ibus_controller.car
 
 import com.trentseed.bmw_rpi_ibus_controller.common.IBUSPacket
 import com.trentseed.bmw_rpi_ibus_controller.common.LogConfig
+import java.time.LocalDateTime
 import java.util.logging.Logger
+import kotlin.text.padStart
+import kotlin.text.toString
+import kotlin.text.uppercase
 
 class IBUSPacketParser {
     private val logger: Logger = LogConfig.getLogger()
@@ -30,14 +34,13 @@ class IBUSPacketParser {
                 //packet.destinationId == 0x3B || packet.destinationId == 0xE7 -> parseGtPacket(packet) // GT
                 packet.sourceId == 0x68 -> parseRadioPacket(packet) // Radio
                 packet.sourceId == 0x80 -> parseInstrumentClusterPacket(packet) // Instrument Cluster
-                packet.sourceId == 0xBF -> parseLightControlModulePacket(packet) // Light Control Module
+                packet.sourceId == 0xD0 -> parseLightControlModulePacket(packet) // Light Control Module
                 packet.sourceId == 0x00 || packet.sourceId == 0x08 -> parseGeneralModulePacket(packet) // General Module
-                packet.sourceId == 0x72 -> parseHvacPacket(packet) // HVAC
+                packet.sourceId == 0x5B -> parseHvacPacket(packet) // HVAC
                 packet.sourceId == 0x66 -> parseMultiFunctionSteeringWheelPacket(packet) // Multi Function Steering Wheel
-                packet.sourceId == 0x3B || packet.sourceId == 0xE7 -> {
-                    parseGtPacketExtended(packet)
-                }
-                else -> logger.warning("Unknown source address: ${packet.sourceId}")
+                packet.sourceId == 0x3B || packet.sourceId == 0xE7 -> parseGtPacketExtended(packet)
+                packet.sourceId == 0x7F -> parseNavigationPacket(packet)
+                else -> logger.warning("Unknown packet: ${printIntListAsHex(packet.raw)}")
             }
         } catch (e: Exception) {
             logger.severe("Error parsing packet: ${printIntListAsHex(packet.raw)}")
@@ -45,22 +48,76 @@ class IBUSPacketParser {
         }
     }
 
+    private fun parseNavigationPacket(packet: IBUSPacket) {
+        when {
+            packet.data[0] == 0x1F -> {
+                val hour = packet.data[2]
+                val minute = packet.data[3]
+                val day = packet.data[4]
+                val month = packet.data[6]
+                val year = packet.data[7] * 100 + packet.data[8]
+                carState.navigation.datetime = LocalDateTime.of(year, month, day, hour, minute)
+            }
+            packet.data[0] == 0xA2 -> {
+                // Latitude
+                val latitudeDegrees = packet.data[3]
+                val latitudeMinutes = packet.data[4]
+                val latitudeSeconds = packet.data[5]
+                val latitudeFractional = packet.data[6].toString(16).padStart(2, '0').uppercase()[0]
+                val latitudeDirection = if (packet.data[6] and 15 == 1) "S" else "N"
+                var latitude = String.format("%02X°%02X'%02X.%s\"%s", latitudeDegrees, latitudeMinutes, latitudeSeconds, latitudeFractional, latitudeDirection)
+                if (latitudeDegrees > 90) {
+                    latitude = String.format("-%02X°%02X'%02X.%s\"%s", latitudeDegrees - 180, latitudeMinutes, latitudeSeconds, latitudeFractional, latitudeDirection)
+                }
+                carState.navigation.latitude = latitude
+
+                // Longitude
+                val longitudeDegrees = packet.data[8]
+                val longitudeMinutes = packet.data[9]
+                val longitudeSeconds = packet.data[10]
+                val longitudeFractional = packet.data[11].toString(16).padStart(2, '0').uppercase()[0]
+                val longitudeDirection = if (packet.data[11] and 15 == 1) "W" else "E"
+                val longitude = String.format("%02X°%02X'%02X.%s\"%s", longitudeDegrees, longitudeMinutes, longitudeSeconds, longitudeFractional, longitudeDirection)
+                carState.navigation.longitude = longitude
+
+                // Altitude
+                carState.navigation.altitude = packet.data[12] * 100 + packet.data[13]
+
+                // Time
+                carState.navigation.datetime.withHour(packet.data[15])
+                carState.navigation.datetime.withMinute(packet.data[16])
+                carState.navigation.datetime.withSecond(packet.data[17])
+            }
+            packet.data[0] == 0xA4 -> {
+                if (packet.data[2] == 0x01) { carState.navigation.city = IBUSPacket.convertASCIIHexToString(packet.data.drop(3))}
+                if (packet.data[2] == 0x02) { carState.navigation.street = IBUSPacket.convertASCIIHexToString(packet.data.drop(3))}
+            }
+            packet.data[0] == 0xA7 -> {
+
+            }
+            packet.data[0] == 0xA9 -> {
+                // Telephone
+            }
+            else -> logger.info("Navigation packet: ${printIntListAsHex(packet.raw)}")
+        }
+    }
+
     private fun parseRadioPacket(packet: IBUSPacket) {
         // Example: Check if the packet is a power on/off command
-        if (packet.data.size >= 2 && packet.data[0] == 0x43 && packet.data[1] == 0x01) {
+        if (packet.data[0] == 0x43 && packet.data[1] == 0x01) {
             carState.radio.power = true
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x43 && packet.data[1] == 0x00) {
+        } else if (packet.data[0] == 0x43 && packet.data[1] == 0x00) {
             carState.radio.power = false
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x44) {
+        } else if (packet.data[0] == 0x44) {
             carState.radio.volume = packet.data[1]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x42) {
+        } else if (packet.data[0] == 0x42) {
             carState.radio.band = when (packet.data[1]) {
                 0x00 -> RadioBand.AM
                 0x01 -> RadioBand.FM
                 0x02 -> RadioBand.DAB
                 else -> RadioBand.FM
             }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x45) {
+        } else if (packet.data[0] == 0x45) {
             carState.radio.mute = packet.data[1] == 0x01
         } else if (packet.data.size >= 3 && packet.data[0] == 0x46) {
             carState.radio.cdChangerDisc = packet.data[1]
@@ -73,29 +130,28 @@ class IBUSPacketParser {
     private fun parseInstrumentClusterPacket(packet: IBUSPacket) {
         // Example: Extract speed from the packet
         if (packet.data[0] == 0x11) {
-            val ignitionState = if (packet.data[4] < 2) packet.data[4] else (0x02 and packet.data[4])
-            carState.instrumentCluster.ignitionState = when (ignitionState) {
+            carState.instrumentCluster.ignitionState = when (packet.data[1] and 0x07) {
                 0 -> IgnitionState.OFF
                 1 -> IgnitionState.ACC
                 3 -> IgnitionState.ON
                 7 -> IgnitionState.START
                 else -> IgnitionState.UNKNOWN
             }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x13) {
+        } else if (packet.data[0] == 0x13) {
             carState.instrumentCluster.handbrakeOn = packet.data[1] and 0x01 == 0x01
             carState.instrumentCluster.engineRunning = packet.data[2] and 0x01 == 0x01
             carState.instrumentCluster.gear = if (packet.data[2] and 0x10 == 0x01) -1 else packet.data[2] and 0xF0
             carState.instrumentCluster.fuelLevel = packet.data[7]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x15) {
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x17) {
+        } else if (packet.data[0] == 0x15) {
+        } else if (packet.data[0] == 0x17) {
             carState.instrumentCluster.odometer = packet.data[1] + packet.data[2] shl 8 + packet.data[3] shl 16
             carState.instrumentCluster.serviceInterval = (packet.data[4] + packet.data[5]) * 50
             carState.instrumentCluster.serviceIntervalType = packet.data[6]
             carState.instrumentCluster.serviceIntervalDays = packet.data[7]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x18) {
+        } else if (packet.data[0] == 0x18) {
             carState.instrumentCluster.speed = packet.data[1]
             carState.instrumentCluster.rpm = packet.data[2] * 100
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x19) {
+        } else if (packet.data[0] == 0x19) {
             carState.instrumentCluster.outsideTemp = when{
                 packet.data[1] > 128 -> packet.data[1] - 256
                 else -> packet.data[1]
@@ -104,9 +160,11 @@ class IBUSPacketParser {
                 packet.data[2] > 128 -> packet.data[2] - 256
                 else -> packet.data[2]
             }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x24) {
+        } else if (packet.data[0] == 0x24) {
             val text = IBUSPacket.convertASCIIHexToString(packet.data.subList(3, packet.data.size))
             logger.info("Display: " + text)
+        } else if (packet.data[0] == 0x54) {
+            carState.instrumentCluster.vin = IBUSPacket.convertASCIIHexToString(packet.data.subList(1, 6))
         } else {
             logger.info("Instrument Cluster packet: ${printIntListAsHex(packet.raw)}")
         }
@@ -216,19 +274,19 @@ class IBUSPacketParser {
 
     private fun parseGeneralModulePacket(packet: IBUSPacket) {
         // Example: Extract door status from the packet
-        if (packet.data.size >= 2 && packet.data[0] == 0x72) {
+        if (packet.data[0] == 0x72) {
             carState.keyFob.keyNumber = packet.data[1] and 0x03
             carState.keyFob.lowBattery = packet.data[1] and 0x01 == 1
             carState.keyFob.lockButtonPressed = packet.data[1] and 0x10 == 1
             carState.keyFob.unlockButtonPressed = packet.data[1] and 0x20 == 1
             carState.keyFob.trunkButtonPressed = packet.data[1] and 0x40 == 1
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x76) {
+        } else if (packet.data[0] == 0x76) {
 
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x77) {
+        } else if (packet.data[0] == 0x77) {
 
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x78) {
+        } else if (packet.data[0] == 0x78) {
 
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x7A) {
+        } else if (packet.data[0] == 0x7A) {
             carState.generalModule.doorDriver = when (packet.data[1] and 0x01) {
                 0x00 -> DoorStatus.CLOSED
                 0x01 -> DoorStatus.OPEN
@@ -294,7 +352,7 @@ class IBUSPacketParser {
                 0x01 -> DoorStatus.OPEN
                 else -> DoorStatus.CLOSED
             }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x7D) {
+        } else if (packet.data[0] == 0x7D) {
 
         } else {
             logger.info("General Module packet: ${printIntListAsHex(packet.raw)}")
@@ -302,14 +360,14 @@ class IBUSPacketParser {
     }
 
     private fun parseHvacPacket(packet: IBUSPacket) {
-        if (packet.data.size >= 2 && packet.data[0] == 0x01) {
+        if (packet.data[0] == 0x01) {
             carState.hvac.mode = when (packet.data[1]) {
                 0x00 -> HvacMode.OFF
                 0x01 -> HvacMode.AUTO
                 0x02 -> HvacMode.MANUAL
                 else -> HvacMode.OFF
             }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x02) {
+        } else if (packet.data[0] == 0x02) {
             carState.hvac.fanSpeed = when (packet.data[1]) {
                 0x00 -> HvacFanSpeed.OFF
                 0x01 -> HvacFanSpeed.LOW
@@ -317,22 +375,22 @@ class IBUSPacketParser {
                 0x03 -> HvacFanSpeed.HIGH
                 else -> HvacFanSpeed.OFF
             }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x03) {
+        } else if (packet.data[0] == 0x03) {
             carState.hvac.temperatureDriver = packet.data[1]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x04) {
+        } else if (packet.data[0] == 0x04) {
             carState.hvac.temperaturePassenger = packet.data[1]
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x05) {
+        } else if (packet.data[0] == 0x05) {
             carState.hvac.airDistribution = when (packet.data[1]) {
                 0x00 -> HvacAirDistribution.FACE
                 0x01 -> HvacAirDistribution.FEET
                 0x02 -> HvacAirDistribution.DEFROST
                 else -> HvacAirDistribution.FACE
             }
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x06) {
+        } else if (packet.data[0] == 0x06) {
             carState.hvac.ac = packet.data[1] == 0x01
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x07) {
+        } else if (packet.data[0] == 0x07) {
             carState.hvac.recirculate = packet.data[1] == 0x01
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x08) {
+        } else if (packet.data[0] == 0x08) {
             carState.hvac.defrost = packet.data[1] == 0x01
         } else {
             logger.info("HVAC packet: ${printIntListAsHex(packet.raw)}")
@@ -340,7 +398,7 @@ class IBUSPacketParser {
     }
 
     private fun parseMultiFunctionSteeringWheelPacket(packet: IBUSPacket) {
-        if (packet.data.size >= 2 && packet.data[0] == 0x01) {
+        if (packet.data[0] == 0x01) {
             carState.multiFunctionSteeringWheel.buttonPressed = when (packet.data[1]) {
                 0x01 -> SteeringWheelButton.VOLUME_UP
                 0x02 -> SteeringWheelButton.VOLUME_DOWN
@@ -477,15 +535,15 @@ class IBUSPacketParser {
             carState.bmButton.button6Hold = true
         } else if (packet.data == listOf(0x48, 0x83)) {
             carState.bmButton.button6Rel = true
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x32 && (packet.data[1] and 0x0F) == 0x01) {
+        } else if (packet.data[0] == 0x32 && (packet.data[1] and 0x0F) == 0x01) {
             carState.bmButton.volRight = (packet.data[1] shr 4) and 0x0F
             logger.info("BM_VOL_KNOB_RIGHT -steps: ${carState.bmButton.volRight}")
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x32 && (packet.data[1] and 0x0F) == 0x00) {
+        } else if (packet.data[0] == 0x32 && (packet.data[1] and 0x0F) == 0x00) {
             carState.bmButton.volLeft = (packet.data[1] shr 4) and 0x0F
             logger.info("BM_VOL_KNOB_LEFT -steps: ${carState.bmButton.volLeft}")
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x32 && (packet.data[1] and 0x0F) == 0x02) {
+        } else if (packet.data[0] == 0x32 && (packet.data[1] and 0x0F) == 0x02) {
             carState.bmButton.volRel = true
-        } else if (packet.data.size >= 2 && packet.data[0] == 0x32 && (packet.data[1] and 0x0F) == 0x03) {
+        } else if (packet.data[0] == 0x32 && (packet.data[1] and 0x0F) == 0x03) {
             carState.bmButton.volHold = true
         } else if (packet.data == listOf(0x48, 0x00)) {
             carState.bmButton.modePres = true
@@ -658,7 +716,22 @@ class IBUSPacketParser {
         compareStwButtonState(oldState.stwButton, newState.stwButton, changes)
         compareGtState(oldState.gt, newState.gt, changes)
         compareKeyfobState(oldState.keyFob, newState.keyFob, changes)
+        compareNavigationState(oldState.navigation, newState.navigation, changes)
         return changes.toString()
+    }
+
+    private fun compareNavigationState(
+        oldState: NavigationState,
+        newState: NavigationState,
+        changes: StringBuilder
+    ) {
+        if (oldState.gpsFix != newState.gpsFix) changes.appendLine("  Navigation GPS Fixed: ${oldState.gpsFix} -> ${newState.gpsFix}")
+        if (oldState.altitude != newState.altitude) changes.appendLine("  Navigation Altitude: ${oldState.altitude} -> ${newState.altitude}")
+        if (oldState.latitude != newState.latitude) changes.appendLine("  Navigation Latitude: ${oldState.latitude} -> ${newState.latitude}")
+        if (oldState.longitude != newState.longitude) changes.appendLine("  Navigation Longitude: ${oldState.longitude} -> ${newState.longitude}")
+        if (oldState.city != newState.city) changes.appendLine("  Navigation City: ${oldState.city} -> ${newState.city}")
+        if (oldState.street != newState.street) changes.appendLine("  Navigation Street: ${oldState.street} -> ${newState.street}")
+        if (oldState.datetime != newState.datetime) changes.appendLine("  Navigation Date & Time: ${oldState.datetime} -> ${newState.datetime}")
     }
 
     private fun compareKeyfobState(oldState: KeyfobState, newState: KeyfobState, changes: StringBuilder) {

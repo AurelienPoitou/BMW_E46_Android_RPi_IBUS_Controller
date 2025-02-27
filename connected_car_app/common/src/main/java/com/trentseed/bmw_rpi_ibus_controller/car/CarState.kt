@@ -1,5 +1,8 @@
 package com.trentseed.bmw_rpi_ibus_controller.car
 
+import java.time.LocalDateTime
+import java.util.Date
+
 class CarState private constructor(
     val radio: RadioState,
     val instrumentCluster: InstrumentClusterState,
@@ -12,7 +15,8 @@ class CarState private constructor(
     val bmButton: BmButtonState,
     val stwButton: StwButtonState,
     val gt: GtState,
-    val keyFob: KeyfobState
+    val keyFob: KeyfobState,
+    val navigation: NavigationState
 ) {
 
     // Primary constructor for initial creation
@@ -28,7 +32,8 @@ class CarState private constructor(
         BmButtonState(),
         StwButtonState(),
         GtState(),
-        KeyfobState()
+        KeyfobState(),
+        NavigationState()
     )
 
     companion object {
@@ -55,7 +60,30 @@ class CarState private constructor(
             bmButton.copy(),
             stwButton.copy(),
             gt.copy(),
-            keyFob.copy()
+            keyFob.copy(),
+            navigation.copy()
+        )
+    }
+}
+
+data class NavigationState(
+    var gpsFix: Boolean = false,
+    var latitude: String = "",
+    var longitude: String = "",
+    var altitude: Int = -1,
+    var datetime: LocalDateTime = LocalDateTime.now(),
+    var city: String = "",
+    var street: String = "",
+) {
+    fun copy(): NavigationState {
+        return NavigationState(
+            gpsFix,
+            latitude,
+            longitude,
+            altitude,
+            datetime,
+            city,
+            street
         )
     }
 }
