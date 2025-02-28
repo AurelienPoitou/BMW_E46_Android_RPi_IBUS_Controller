@@ -96,6 +96,9 @@ public class IBUSPacket {
 
         // split into two chars per loop, hex, 0A, 0B, 0C...
         for (int i = 0; i < hex.size(); i += 1) {
+            if (hex.get(i) == 0) {
+                break;
+            }
             // convert the decimal to char
             result.append((char) hex.get(i).intValue());
         }

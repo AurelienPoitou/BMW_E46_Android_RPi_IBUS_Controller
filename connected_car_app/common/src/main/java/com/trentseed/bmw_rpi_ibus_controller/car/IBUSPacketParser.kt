@@ -40,11 +40,27 @@ class IBUSPacketParser {
                 packet.sourceId == 0x66 -> parseMultiFunctionSteeringWheelPacket(packet) // Multi Function Steering Wheel
                 packet.sourceId == 0x3B || packet.sourceId == 0xE7 -> parseGtPacketExtended(packet)
                 packet.sourceId == 0x7F -> parseNavigationPacket(packet)
+                packet.sourceId == 0x44 -> parseImmobilizerPacket(packet)
                 else -> logger.warning("Unknown packet: ${printIntListAsHex(packet.raw)}")
             }
         } catch (e: Exception) {
             logger.severe("Error parsing packet: ${printIntListAsHex(packet.raw)}")
             logger.severe(e.stackTraceToString())
+        }
+    }
+
+    private fun parseImmobilizerPacket(packet: IBUSPacket) {
+        when {
+            packet.data[0] == 0x74 -> {
+                carState.immobilizer.keyPosition = when (packet.data[1] and 0x07) {
+                    0 -> IgnitionState.OFF
+                    1 -> IgnitionState.ACC
+                    3 -> IgnitionState.ON
+                    7 -> IgnitionState.START
+                    else -> IgnitionState.UNKNOWN
+                }
+                carState.immobilizer.keyNumber = packet.data[2]
+            }
         }
     }
 
@@ -970,7 +986,12 @@ class IBUSPacketParser {
         if (oldState.mode != newState.mode) changes.appendLine("  GT Mode: ${oldState.mode} -> ${newState.mode}")
     }
 
-    fun printIntListAsHex(intList: List<Int>): String {
+    private fun compareImmobilizerState(oldState: ImmobilizerState, newState: ImmobilizerState, changes: StringBuilder) {
+        if (oldState.keyPosition != newState.keyPosition) changes.appendLine("  Immobilizer Key Position: ${oldState.keyPosition} -> ${newState.keyPosition}")
+        if (oldState.keyNumber != newState.keyNumber) changes.appendLine("  Immobilizer Key Number: ${oldState.keyNumber} -> ${newState.keyNumber}")
+    }
+
+    private fun printIntListAsHex(intList: List<Int>): String {
         var hexString = ""
         for (number in intList) {
             hexString += number.toString(16).uppercase().padStart(2, '0') + " "
